@@ -80,7 +80,7 @@ where
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
-                format!("connection ID {:#x} doesn't exist", conn_id),
+                format!("connection {:#x} doesn't exist", conn_id),
             ))
         }
     }
@@ -103,7 +103,7 @@ where
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
-                format!("connection ID {:#x} doesn't exist", conn_id),
+                format!("connection {:#x} doesn't exist", conn_id),
             ))
         }
     }
@@ -147,7 +147,7 @@ where
         } else {
             Err(io::Error::new(
                 io::ErrorKind::Other,
-                format!("connection ID {:#x} doesn't exist", conn_id),
+                format!("connection {:#x} doesn't exist", conn_id),
             ))
         }
     }
