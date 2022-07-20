@@ -2,13 +2,13 @@ use std::{collections::HashMap, ops::Deref, sync::Arc};
 
 use once_cell::race::OnceBox;
 use parking_lot::{Mutex, RwLock};
-use quinn::Endpoint;
+use quinn::{ClientConfig, Endpoint, ServerConfig};
 use tokio::task::JoinHandle;
 
 use crate::conn::{Conn, ConnId};
 
 /// Contains objects providing P2P networking capabilities.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct Node(Arc<InnerNode>);
 
 impl Deref for Node {
@@ -20,14 +20,23 @@ impl Deref for Node {
 }
 
 #[doc(hidden)]
-#[derive(Default)]
 pub struct InnerNode {
+    pub(crate) config: Config,
     pub(crate) endpoint: OnceBox<Endpoint>,
     pub(crate) conns: RwLock<HashMap<ConnId, Conn>>,
     pub(crate) tasks: Mutex<Vec<JoinHandle<()>>>,
 }
 
 impl Node {
+    pub fn new(config: Config) -> Self {
+        Self(Arc::new(InnerNode {
+            config,
+            endpoint: Default::default(),
+            conns: Default::default(),
+            tasks: Default::default(),
+        }))
+    }
+
     pub(crate) fn register_task(&self, handle: JoinHandle<()>) {
         self.tasks.lock().push(handle);
     }
@@ -36,5 +45,24 @@ impl Node {
         if let Some(tasks) = self.conns.read().get(&conn_id).map(|c| c.tasks.clone()) {
             tasks.lock().push(handle);
         }
+    }
+}
+
+/// The configuration for the node.
+#[derive(Debug, Clone)]
+pub struct Config {
+    /// Default client configuration (mandatory to allow outbound connections).
+    pub(crate) client: Option<ClientConfig>,
+    /// Server configuration (mandatory to allow inbound connections).
+    pub(crate) server: Option<ServerConfig>,
+}
+
+impl Config {
+    pub fn new(client: Option<ClientConfig>, server: Option<ServerConfig>) -> Self {
+        if client.is_none() && server.is_none() {
+            panic!("the node can't function without any config");
+        }
+
+        Self { client, server }
     }
 }

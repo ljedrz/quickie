@@ -2,7 +2,17 @@
 
 ### Added
 
-- `Quickie::send_datagram`
+- `Quickie::send_datagram`: the counterpart to [quinn::Connection::send_datagram](https://docs.rs/quinn/0.8.3/quinn/struct.Connection.html#method.send_datagram)
+- `node::Config`: allows nodes to be started in client or server mode
+- `Node::new`: creates a new `Node` with the given `Config`
+
+### Changed
+
+- `Quickie::listen` became `::start`, and it only has a `SocketAddr` param now
+
+### Removed
+
+- `impl Default for Node`: no longer possible due to it containing the `Config` now
 
 # 0.1.0
 

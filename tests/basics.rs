@@ -5,13 +5,13 @@ use std::{io, time::Duration};
 use bytes::{Bytes, BytesMut};
 use futures_util::{sink::SinkExt, StreamExt};
 use quickie::*;
-use quinn::{ClientConfig, Endpoint, ServerConfig, StreamId};
+use quinn::{Endpoint, NewConnection, StreamId};
 use tokio::time::sleep;
 use tokio_util::codec::{BytesCodec, FramedWrite};
 use tracing::*;
 use tracing_subscriber::filter::LevelFilter;
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 struct TestNode(Node);
 
 #[async_trait::async_trait]
@@ -55,43 +55,27 @@ impl Quickie for TestNode {
     }
 }
 
-// a temporary test that only checks that the library "basically works"
+// a temporary test that only checks that the server side "basically works"
 #[tokio::test]
-async fn temp() {
-    common::start_logger(LevelFilter::TRACE);
+async fn temp_server_side_comms() {
+    // a node in server mode
+    let (server_cfg, server_cert) = common::server_config_and_cert();
+    let node = TestNode(Node::new(Config::new(None, Some(server_cfg))));
+    let node_addr = node.start("127.0.0.1:0".parse().unwrap()).await.unwrap();
 
-    // configure the QUIC server
-    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let cert_der = cert.serialize_der().unwrap();
-    let priv_key = cert.serialize_private_key_der();
-    let priv_key = rustls::PrivateKey(priv_key);
-    let cert_chain = vec![rustls::Certificate(cert_der.clone())];
-    let server_config = ServerConfig::with_single_cert(cert_chain, priv_key).unwrap();
-    /* TODO: check out
-    Arc::get_mut(&mut server_config.transport)
-        .unwrap()
-        .max_concurrent_uni_streams(0_u8.into());
-    */
+    // a client endpoint
+    let client_cfg = common::client_config(server_cert);
+    let mut client = Endpoint::client("127.0.0.1:0".parse().unwrap()).unwrap();
+    client.set_default_client_config(client_cfg);
+    let client_addr = client.local_addr().unwrap();
 
-    let node = TestNode::default();
-    let node_addr = node
-        .listen("127.0.0.1:0".parse().unwrap(), server_config)
+    assert!(node
+        .connect(client_addr, common::SERVER_NAME)
         .await
-        .unwrap();
-
-    let client = {
-        let mut certs = rustls::RootCertStore::empty();
-        certs.add(&rustls::Certificate(cert_der.to_vec())).unwrap();
-        let config = ClientConfig::with_root_certificates(certs);
-
-        let mut client = Endpoint::client("127.0.0.1:0".parse().unwrap()).unwrap();
-        client.set_default_client_config(config);
-
-        client
-    };
+        .is_err());
 
     let mut client_conn = client
-        .connect(node_addr, "localhost")
+        .connect(node_addr, common::SERVER_NAME)
         .unwrap()
         .await
         .unwrap();
@@ -99,13 +83,13 @@ async fn temp() {
     let mut framed = FramedWrite::new(send_stream, BytesCodec::default());
 
     let msg = b"herp derp";
-    framed.send(Bytes::from(&msg[..])).await.unwrap();
+    framed.send(Bytes::from_static(msg)).await.unwrap();
 
     sleep(Duration::from_millis(100)).await;
 
     let conn_id = node.get_connections().pop().unwrap().stable_id();
     let stream_idx = node.open_uni(conn_id).await.unwrap();
-    node.unicast(conn_id, stream_idx, Bytes::from(&msg[..]))
+    node.unicast(conn_id, stream_idx, Bytes::from_static(msg))
         .unwrap();
 
     let mut msg_recv = [0u8; 9];
@@ -122,4 +106,49 @@ async fn temp() {
     assert_eq!(&msg_recv, msg);
 
     sleep(Duration::from_millis(100)).await;
+}
+
+// a temporary test that only checks that the server side "basically works"
+#[tokio::test]
+async fn temp_client_side_comms() {
+    common::start_logger(LevelFilter::TRACE);
+
+    // prepare the configs
+    let (server_cfg, server_cert) = common::server_config_and_cert();
+    let client_cfg = common::client_config(server_cert);
+
+    // an endpoint in server mode
+    let (mut server, mut server_incoming) =
+        Endpoint::server(server_cfg, "127.0.0.1:0".parse().unwrap()).unwrap();
+    server.set_default_client_config(client_cfg.clone());
+    let server_addr = server.local_addr().unwrap();
+
+    // a client node
+    let node = TestNode(Node::new(Config::new(Some(client_cfg), None)));
+    let node_addr = node.start("127.0.0.1:0".parse().unwrap()).await.unwrap();
+
+    assert!(server
+        .connect(node_addr, common::SERVER_NAME)
+        .unwrap()
+        .await
+        .is_err());
+
+    let conn_id = node
+        .connect(server_addr, common::SERVER_NAME)
+        .await
+        .unwrap();
+
+    let NewConnection { mut bi_streams, .. } = server_incoming.next().await.unwrap().await.unwrap();
+
+    let (send_stream_idx, recv_stream_idx) = node.open_bi(conn_id).await.unwrap();
+
+    let msg = b"herp derp";
+    node.unicast(conn_id, send_stream_idx, Bytes::from_static(msg))
+        .unwrap();
+
+    let (send_stream, mut recv_stream) = bi_streams.next().await.unwrap().unwrap();
+
+    let mut msg_recv = [0u8; 9];
+    recv_stream.read_exact(&mut msg_recv).await.unwrap();
+    assert_eq!(&msg_recv, msg);
 }

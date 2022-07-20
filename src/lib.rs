@@ -9,7 +9,7 @@ use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use quinn::{
     Connecting, Datagrams, Endpoint, IncomingBiStreams, IncomingUniStreams, NewConnection,
-    RecvStream, SendStream, ServerConfig, StreamId,
+    RecvStream, SendStream, StreamId,
 };
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite};
@@ -18,7 +18,7 @@ use tracing::*;
 use crate::conn::Conn;
 pub use crate::{
     conn::{ConnId, StreamIdx},
-    node::Node,
+    node::{Config, Node},
 };
 pub use quinn::{Connection, VarInt};
 
@@ -165,34 +165,51 @@ where
         }
     }
 
-    /// Binds the node to a UDP socket with the given address and server config.
-    async fn listen(&self, addr: SocketAddr, config: ServerConfig) -> io::Result<SocketAddr> {
+    /// Binds the node to a UDP socket with the given address and returns the bound address.
+    async fn start(&self, addr: SocketAddr) -> io::Result<SocketAddr> {
         // create the QUIC endpoint
-        let (endpoint, mut incoming) = Endpoint::server(config, addr).unwrap();
+        let (mut endpoint, incoming) = if let Some(server_cfg) = self.node().config.server.clone() {
+            let (endpoint, incoming) = Endpoint::server(server_cfg, addr)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+            (endpoint, Some(incoming))
+        } else {
+            let endpoint =
+                Endpoint::client(addr).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+            (endpoint, None)
+        };
+
+        if let Some(client_cfg) = self.node().config.client.clone() {
+            endpoint.set_default_client_config(client_cfg);
+        }
+
         let local_addr = endpoint.local_addr()?;
         self.node().endpoint.set(Box::new(endpoint)).unwrap();
 
-        let (tx, rx) = oneshot::channel();
-        let node = self.clone();
-        let task = tokio::spawn(async move {
-            trace!("spawned the listening task");
-            tx.send(()).unwrap(); // safe; the channel was just opened
+        if let Some(mut inc) = incoming {
+            let (tx, rx) = oneshot::channel();
+            let node = self.clone();
+            let task = tokio::spawn(async move {
+                trace!("spawned the listening task");
+                tx.send(()).unwrap(); // safe; the channel was just opened
 
-            while let Some(conn) = incoming.next().await {
-                let addr = conn.remote_address();
-                trace!("received a connection attempt from {}", addr);
+                while let Some(conn) = inc.next().await {
+                    let addr = conn.remote_address();
+                    trace!("received a connection attempt from {}", addr);
 
-                let node_clone = node.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = node_clone.process_conn(conn).await {
-                        error!("rejected a connection attempt from {}: {}", addr, e);
-                    }
-                });
-            }
-        });
+                    let node_clone = node.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = node_clone.process_conn(conn).await {
+                            error!("rejected a connection attempt from {}: {}", addr, e);
+                        }
+                    });
+                }
+            });
 
-        self.node().register_task(task);
-        let _ = rx.await;
+            self.node().register_task(task);
+            let _ = rx.await;
+        }
 
         Ok(local_addr)
     }
