@@ -7,6 +7,7 @@ pub const SERVER_NAME: &str = "test_server";
 
 const MAX_IDLE_TIMEOUT_MS: u32 = 250;
 
+#[allow(unused)]
 pub fn start_logger(default_level: LevelFilter) {
     let filter = match EnvFilter::try_from_default_env() {
         Ok(filter) => filter

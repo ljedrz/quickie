@@ -9,7 +9,6 @@ use quinn::{Endpoint, NewConnection, StreamId};
 use tokio::time::sleep;
 use tokio_util::codec::{BytesCodec, FramedWrite};
 use tracing::*;
-use tracing_subscriber::filter::LevelFilter;
 
 #[derive(Clone)]
 struct TestNode(Node);
@@ -111,8 +110,6 @@ async fn temp_server_side_comms() {
 // a temporary test that only checks that the server side "basically works"
 #[tokio::test]
 async fn temp_client_side_comms() {
-    common::start_logger(LevelFilter::TRACE);
-
     // prepare the configs
     let (server_cfg, server_cert) = common::server_config_and_cert();
     let client_cfg = common::client_config(server_cert);
