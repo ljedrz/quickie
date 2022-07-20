@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Deref, sync::Arc};
+use std::{collections::HashMap, io, ops::Deref, sync::Arc};
 
 use once_cell::race::OnceBox;
 use parking_lot::{Mutex, RwLock};
@@ -35,6 +35,15 @@ impl Node {
             conns: Default::default(),
             tasks: Default::default(),
         }))
+    }
+
+    pub(crate) fn get_endpoint(&self) -> io::Result<&Endpoint> {
+        self.endpoint.get().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                "no existing socket found; you must call `Node::start` first",
+            )
+        })
     }
 
     pub(crate) fn register_task(&self, handle: JoinHandle<()>) {

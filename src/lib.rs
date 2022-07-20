@@ -219,26 +219,12 @@ where
 
     /// Switches the node to a new UDP socket; works the same way as in [quinn](https://docs.rs/quinn/latest/quinn/struct.Endpoint.html#method.rebind).
     fn rebind(&self, socket: UdpSocket) -> io::Result<()> {
-        self.node()
-            .endpoint
-            .get()
-            .ok_or(io::Error::new(
-                io::ErrorKind::Other,
-                "no existing socket found",
-            ))?
-            .rebind(socket)
+        self.node().get_endpoint()?.rebind(socket)
     }
 
     /// Returns the local address the node's socket is bound to.
     fn local_addr(&self) -> io::Result<SocketAddr> {
-        self.node()
-            .endpoint
-            .get()
-            .ok_or(io::Error::new(
-                io::ErrorKind::Other,
-                "no existing socket found",
-            ))?
-            .local_addr()
+        self.node().get_endpoint()?.local_addr()
     }
 
     /// Connects the node to the given address and returns its stable ID; the `server_name`
@@ -246,9 +232,7 @@ where
     async fn connect(&self, addr: SocketAddr, server_name: &str) -> io::Result<ConnId> {
         let conn = self
             .node()
-            .endpoint
-            .get()
-            .unwrap()
+            .get_endpoint()?
             .connect(addr, server_name)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
