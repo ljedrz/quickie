@@ -1,5 +1,8 @@
 //! A simple, low-level, and customizable implementation of a QUIC P2P node.
 
+#![deny(missing_docs)]
+#![deny(unsafe_code)]
+
 mod conn;
 mod node;
 

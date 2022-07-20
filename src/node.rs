@@ -28,6 +28,7 @@ pub struct InnerNode {
 }
 
 impl Node {
+    /// Creates an idle node with the given config.
     pub fn new(config: Config) -> Self {
         Self(Arc::new(InnerNode {
             config,
@@ -67,6 +68,8 @@ pub struct Config {
 }
 
 impl Config {
+    /// Creates a new node config object. The arguments can't be `None` at the same time
+    /// (otherwise the node couldn't do anything).
     pub fn new(client: Option<ClientConfig>, server: Option<ServerConfig>) -> Self {
         if client.is_none() && server.is_none() {
             panic!("the node can't function without any config");
