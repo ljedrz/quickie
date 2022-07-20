@@ -28,6 +28,7 @@ futures-util = { version = "0.3", features = ["sink"] }
 once_cell = { version = "1", features = ["parking_lot"] }
 parking_lot = "0.12"
 quinn = "0.8"
+quinn-proto = { version = "0.8", default-features = false }
 tokio = { version = "1.14", features = ["io-util", "macros", "net", "parking_lot", "rt", "sync", "time"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 tracing = { version = "0.1", default-features = false }

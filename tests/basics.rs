@@ -37,12 +37,12 @@ impl Quickie for TestNode {
     async fn process_inbound_msg(
         &self,
         conn_id: ConnId,
-        stream_idx: StreamIdx,
+        stream_id: StreamId,
         message: Self::InboundMsg,
     ) -> io::Result<()> {
         info!(
-            "got a message from {:#x}:{} {:?}",
-            conn_id, stream_idx, message
+            "got a message from {:#x} on {}: {:?}",
+            conn_id, stream_id, message
         );
 
         Ok(())
@@ -88,8 +88,8 @@ async fn temp_server_side_comms() {
     sleep(Duration::from_millis(100)).await;
 
     let conn_id = node.get_connections().pop().unwrap().stable_id();
-    let stream_idx = node.open_uni(conn_id).await.unwrap();
-    node.unicast(conn_id, stream_idx, Bytes::from_static(msg))
+    let stream_id = node.open_uni(conn_id).await.unwrap();
+    node.unicast(conn_id, stream_id, Bytes::from_static(msg))
         .unwrap();
 
     let mut msg_recv = [0u8; 9];
@@ -138,17 +138,55 @@ async fn temp_client_side_comms() {
         .await
         .unwrap();
 
-    let NewConnection { mut bi_streams, .. } = server_incoming.next().await.unwrap().await.unwrap();
+    let NewConnection {
+        mut uni_streams,
+        mut bi_streams,
+        mut datagrams,
+        ..
+    } = server_incoming.next().await.unwrap().await.unwrap();
 
-    let (send_stream_idx, recv_stream_idx) = node.open_bi(conn_id).await.unwrap();
+    // check a unidirectional stream
+    {
+        let send_stream_id = node.open_uni(conn_id).await.unwrap();
 
-    let msg = b"herp derp";
-    node.unicast(conn_id, send_stream_idx, Bytes::from_static(msg))
-        .unwrap();
+        let msg = b"herp derp";
+        node.unicast(conn_id, send_stream_id, Bytes::from_static(msg))
+            .unwrap();
 
-    let (send_stream, mut recv_stream) = bi_streams.next().await.unwrap().unwrap();
+        let mut recv_stream = uni_streams.next().await.unwrap().unwrap();
 
-    let mut msg_recv = [0u8; 9];
-    recv_stream.read_exact(&mut msg_recv).await.unwrap();
-    assert_eq!(&msg_recv, msg);
+        let mut msg_recv = [0u8; 9];
+        recv_stream.read_exact(&mut msg_recv).await.unwrap();
+        assert_eq!(&msg_recv, msg);
+    }
+
+    // check a bidirectional stream
+    {
+        let (send_stream_id, _recv_stream_id) = node.open_bi(conn_id).await.unwrap();
+
+        let msg = b"herp derp";
+        node.unicast(conn_id, send_stream_id, Bytes::from_static(msg))
+            .unwrap();
+
+        let (mut send_stream, mut recv_stream) = bi_streams.next().await.unwrap().unwrap();
+
+        let mut msg_recv = [0u8; 9];
+        recv_stream.read_exact(&mut msg_recv).await.unwrap();
+        assert_eq!(&msg_recv, msg);
+
+        send_stream.write_all(msg).await.unwrap();
+
+        sleep(Duration::from_millis(100)).await;
+    }
+
+    // check a datagram
+    {
+        let msg = b"hurr durr";
+        node.send_datagram(conn_id, Bytes::from_static(msg))
+            .unwrap();
+
+        assert_eq!(datagrams.next().await.unwrap().unwrap(), &msg[..]);
+    }
+
+    sleep(Duration::from_millis(100)).await;
 }

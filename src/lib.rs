@@ -15,9 +15,9 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite};
 use tracing::*;
 
-use crate::conn::Conn;
+use crate::conn::{Conn, Sid};
 pub use crate::{
-    conn::{ConnId, StreamIdx},
+    conn::ConnId,
     node::{Config, Node},
 };
 pub use quinn::{Connection, VarInt};
@@ -57,7 +57,7 @@ where
     async fn process_inbound_msg(
         &self,
         conn_id: ConnId,
-        stream_idx: StreamIdx,
+        stream_id: StreamId,
         message: Self::InboundMsg,
     ) -> io::Result<()>;
 
@@ -65,15 +65,15 @@ where
     async fn process_datagram(&self, source: ConnId, datagram: Bytes) -> io::Result<()>;
 
     /// Opens a unidirectional stream with the given connection and returns the resulting
-    /// send stream's index.
-    async fn open_uni(&self, conn_id: ConnId) -> io::Result<StreamIdx> {
+    /// send stream's ID.
+    async fn open_uni(&self, conn_id: ConnId) -> io::Result<StreamId> {
         if let Some(conn) = self.get_connection(conn_id) {
             match conn.open_uni().await {
                 Ok(stream) => {
-                    let stream_idx = stream.id().index();
+                    let stream_id = stream.id();
                     self.handle_send_stream(conn_id, stream).await;
 
-                    Ok(stream_idx)
+                    Ok(stream_id)
                 }
                 Err(e) => Err(io::Error::new(io::ErrorKind::Other, e)),
             }
@@ -86,17 +86,17 @@ where
     }
 
     /// Opens a bidirectional stream with the given connection and returns the resulting
-    /// send and receive streams' indices.
-    async fn open_bi(&self, conn_id: ConnId) -> io::Result<(StreamIdx, StreamIdx)> {
+    /// send and receive streams' IDs.
+    async fn open_bi(&self, conn_id: ConnId) -> io::Result<(StreamId, StreamId)> {
         if let Some(conn) = self.get_connection(conn_id) {
             match conn.open_bi().await {
                 Ok((send_stream, recv_stream)) => {
-                    let send_stream_idx = send_stream.id().index();
+                    let send_stream_id = send_stream.id();
                     self.handle_send_stream(conn_id, send_stream).await;
-                    let recv_stream_idx = recv_stream.id().index();
+                    let recv_stream_id = recv_stream.id();
                     self.handle_recv_stream(conn_id, recv_stream).await;
 
-                    Ok((send_stream_idx, recv_stream_idx))
+                    Ok((send_stream_id, recv_stream_id))
                 }
                 Err(e) => Err(io::Error::new(io::ErrorKind::Other, e)),
             }
@@ -112,7 +112,7 @@ where
     fn unicast(
         &self,
         conn_id: ConnId,
-        stream_idx: StreamIdx,
+        stream_id: StreamId,
         msg: Self::OutboundMsg,
     ) -> io::Result<()> {
         if let Some(senders) = self
@@ -122,17 +122,17 @@ where
             .get(&conn_id)
             .map(|c| c.senders.clone())
         {
-            if let Some(tx) = senders.read().get(&stream_idx) {
+            if let Some(tx) = senders.read().get(&stream_id) {
                 if tx.send(Box::new(msg)).is_err() {
                     error!(
-                        "send stream {:#x}:{} is known, but its channel is closed",
-                        conn_id, stream_idx
+                        "send stream {} is known, but its channel is closed",
+                        Sid(conn_id, stream_id)
                     );
-                    senders.write().remove(&stream_idx);
+                    senders.write().remove(&stream_id);
 
                     Err(io::Error::new(
                         io::ErrorKind::Other,
-                        format!("stream {:#x}:{} is broken", conn_id, stream_idx),
+                        format!("stream {} is broken", Sid(conn_id, stream_id)),
                     ))
                 } else {
                     // TODO: provide an rx for stricter delivery tracking
@@ -141,7 +141,7 @@ where
             } else {
                 Err(io::Error::new(
                     io::ErrorKind::Other,
-                    format!("stream {:#x}:{} doesn't exist", conn_id, stream_idx),
+                    format!("stream {} doesn't exist", Sid(conn_id, stream_id)),
                 ))
             }
         } else {
@@ -314,7 +314,11 @@ where
         let node = self.clone();
         let task = tokio::spawn(async move {
             let stream_id = stream.id();
-            let stream_idx = stream_id.index();
+
+            trace!(
+                "starting a handler task for recv stream {}",
+                Sid(conn_id, stream_id)
+            );
 
             let codec = node.decoder(conn_id, stream_id);
             let mut framed = FramedRead::new(stream, codec);
@@ -327,22 +331,23 @@ where
                         // TODO: send the message to a task dedicated to further processing
                         let node_clone = node.clone();
                         if let Err(e) = node_clone
-                            .process_inbound_msg(conn_id, stream_idx, msg)
+                            .process_inbound_msg(conn_id, stream_id, msg)
                             .await
                         {
                             error!(
-                                "can't process a message from {:#x}:{}: {}",
-                                conn_id, stream_idx, e
+                                "can't process a message from {}: {}",
+                                Sid(conn_id, stream_id),
+                                e
                             );
                         }
                     }
                     Err(e) => {
-                        error!("can't read from {:#x}:{}: {}", conn_id, stream_idx, e);
+                        error!("can't read from {}: {}", Sid(conn_id, stream_id), e);
                     }
                 }
             }
 
-            debug!("receive stream {:#x}:{} was closed", conn_id, stream_idx,);
+            debug!("recv stream {} was closed", Sid(conn_id, stream_id));
         });
 
         let _ = rx.await;
@@ -355,11 +360,15 @@ where
         let node = self.clone();
         let task = tokio::spawn(async move {
             let stream_id = stream.id();
-            let stream_idx = stream_id.index();
+
+            trace!(
+                "starting a handler task for send stream {}",
+                Sid(conn_id, stream_id)
+            );
 
             let (msg_tx, mut msg_rx) = mpsc::unbounded_channel();
             if let Some(conn) = node.node().conns.write().get(&conn_id) {
-                conn.senders.write().insert(stream_idx, msg_tx);
+                conn.senders.write().insert(stream_id, msg_tx);
             } else {
                 return;
             }
@@ -374,8 +383,9 @@ where
 
                 if let Err(e) = framed.send(msg).await {
                     error!(
-                        "couldn't send a message to {:#x}:{}: {}",
-                        conn_id, stream_idx, e
+                        "couldn't send a message to {}: {}",
+                        Sid(conn_id, stream_id),
+                        e
                     );
                 }
             }
@@ -387,10 +397,10 @@ where
                 .get(&conn_id)
                 .map(|c| c.senders.clone())
             {
-                senders.write().remove(&stream_idx);
+                senders.write().remove(&stream_id);
             }
 
-            debug!("send stream {:#x}:{} was closed", conn_id, stream_idx,);
+            debug!("send stream {} was closed", Sid(conn_id, stream_id));
         });
 
         let _ = rx.await;

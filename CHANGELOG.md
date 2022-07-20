@@ -10,6 +10,10 @@
 
 - `Quickie::listen` became `::start`, and it only has a `SocketAddr` param now
 
+### Fixed
+
+- `quinn`'s `StreamId`s are now correctly distinguished (version `0.1` wrongly assumed their numeric indices are unique per connection)
+
 ### Removed
 
 - `impl Default for Node`: no longer possible due to it containing the `Config` now
