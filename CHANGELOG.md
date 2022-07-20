@@ -19,6 +19,7 @@
 ### Removed
 
 - `impl Default for Node`: no longer possible due to it containing the `Config` now
+- `StreamIdx`: not needed anymore
 
 # 0.1.0
 
