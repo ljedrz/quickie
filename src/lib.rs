@@ -3,7 +3,10 @@
 mod conn;
 mod node;
 
-use std::{io, net::SocketAddr};
+use std::{
+    io,
+    net::{SocketAddr, UdpSocket},
+};
 
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
@@ -212,6 +215,18 @@ where
         }
 
         Ok(local_addr)
+    }
+
+    /// Switches the node to a new UDP socket; works the same way as in [quinn](https://docs.rs/quinn/latest/quinn/struct.Endpoint.html#method.rebind).
+    fn rebind(&self, socket: UdpSocket) -> io::Result<()> {
+        self.node()
+            .endpoint
+            .get()
+            .ok_or(io::Error::new(
+                io::ErrorKind::Other,
+                "no existing socket found",
+            ))?
+            .rebind(socket)
     }
 
     /// Connects the node to the given address and returns its stable ID; the `server_name`
