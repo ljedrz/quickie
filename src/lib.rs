@@ -152,6 +152,19 @@ where
         }
     }
 
+    /// Sends the provided message to the specified stream.
+    fn send_datagram(&self, conn_id: ConnId, datagram: Bytes) -> io::Result<()> {
+        if let Some(conn) = self.get_connection(conn_id) {
+            conn.send_datagram(datagram)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("connection {:#x} doesn't exist", conn_id),
+            ))
+        }
+    }
+
     /// Binds the node to a UDP socket with the given address and server config.
     async fn listen(&self, addr: SocketAddr, config: ServerConfig) -> io::Result<SocketAddr> {
         // create the QUIC endpoint
