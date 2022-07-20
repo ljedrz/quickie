@@ -229,6 +229,18 @@ where
             .rebind(socket)
     }
 
+    /// Returns the local address the node's socket is bound to.
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.node()
+            .endpoint
+            .get()
+            .ok_or(io::Error::new(
+                io::ErrorKind::Other,
+                "no existing socket found",
+            ))?
+            .local_addr()
+    }
+
     /// Connects the node to the given address and returns its stable ID; the `server_name`
     /// param is the same as the one in [quinn](https://docs.rs/quinn/latest/quinn/struct.Endpoint.html#method.connect).
     async fn connect(&self, addr: SocketAddr, server_name: &str) -> io::Result<ConnId> {

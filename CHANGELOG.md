@@ -4,6 +4,7 @@
 
 - `Quickie::send_datagram`: the counterpart to [quinn::Connection::send_datagram](https://docs.rs/quinn/0.8.3/quinn/struct.Connection.html#method.send_datagram)
 - `Quickie::rebind`: the counterpart to [quinn::Endpoint::rebind](https://docs.rs/quinn/0.8.3/quinn/struct.Endpoint.html#method.rebind)
+- `Quickie::local_addr`
 - `node::Config`: allows nodes to be started in client or server mode
 - `Node::new`: creates a new `Node` with the given `Config`
 
