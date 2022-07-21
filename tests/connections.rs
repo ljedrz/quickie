@@ -38,6 +38,14 @@ async fn conns_server_only() {
         .unwrap()
         .await
         .is_ok());
+
+    // find the inbound connection
+    wait_until!(1, node.num_connections() == 1);
+    let conn_id = node.get_connections().pop().unwrap().stable_id();
+
+    // check a node-side disconnect
+    assert!(node.disconnect(conn_id, Default::default(), &[0]).await);
+    assert!(node.get_connection(conn_id).is_none());
 }
 
 #[tokio::test]
@@ -61,13 +69,17 @@ async fn conns_client_only() {
         .is_err());
 
     // a client-only node can initiate a connection
-    assert!(node
+    let conn_id = node
         .connect(raw_endpoint_addr, common::SERVER_NAME)
         .await
-        .is_ok());
+        .unwrap();
 
     // make sure that the raw endpoint can finalize the connection too
     assert!(raw_incoming.next().await.unwrap().await.is_ok());
+
+    // check a node-side disconnect
+    assert!(node.disconnect(conn_id, Default::default(), &[0]).await);
+    assert!(node.get_connection(conn_id).is_none());
 }
 
 #[tokio::test]
@@ -87,13 +99,17 @@ async fn conns_client_plus_server() {
     let raw_endpoint_addr = raw_endpoint.local_addr().unwrap();
 
     // a client+server node can initiate a connection
-    assert!(node
+    let conn_id = node
         .connect(raw_endpoint_addr, common::SERVER_NAME)
         .await
-        .is_ok());
+        .unwrap();
 
     // make sure that the raw endpoint can finalize the connection too
     assert!(raw_incoming.next().await.unwrap().await.is_ok());
+
+    // check a node-side disconnect
+    assert!(node.disconnect(conn_id, Default::default(), &[0]).await);
+    assert!(node.get_connection(conn_id).is_none());
 
     // a client+server node can accept a connection
     assert!(raw_endpoint
@@ -101,4 +117,12 @@ async fn conns_client_plus_server() {
         .unwrap()
         .await
         .is_ok());
+
+    // find the inbound connection
+    wait_until!(1, node.num_connections() == 1);
+    let conn_id = node.get_connections().pop().unwrap().stable_id();
+
+    // check a node-side disconnect
+    assert!(node.disconnect(conn_id, Default::default(), &[0]).await);
+    assert!(node.get_connection(conn_id).is_none());
 }
