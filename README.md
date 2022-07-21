@@ -24,5 +24,7 @@ That's it!
 - TODO
 
 ## status
-- the core functionalities seem to work, but there are no proper tests or examples yet
+- the core functionalities seem to work, but there can still be bugs
+- not all the `quinn` features are exposed yet
+- some tests are already in place
 - the crate follows [semver](https://semver.org/), and API breakage is to be expected before `1.0`
