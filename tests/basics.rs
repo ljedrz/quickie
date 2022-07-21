@@ -1,65 +1,20 @@
 mod common;
 
-use std::{io, time::Duration};
+use std::time::Duration;
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use futures_util::{sink::SinkExt, StreamExt};
 use quickie::*;
-use quinn::{Endpoint, NewConnection, StreamId};
+use quinn::{Endpoint, NewConnection};
 use tokio::time::sleep;
 use tokio_util::codec::{BytesCodec, FramedWrite};
-use tracing::*;
-
-#[derive(Clone)]
-struct TestNode(Node);
-
-#[async_trait::async_trait]
-impl Quickie for TestNode {
-    type InboundMsg = BytesMut;
-    type Decoder = BytesCodec;
-
-    type OutboundMsg = Bytes;
-    type Encoder = BytesCodec;
-
-    fn node(&self) -> &Node {
-        &self.0
-    }
-
-    fn decoder(&self, _conn_id: ConnId, _stream_id: StreamId) -> Self::Decoder {
-        Default::default()
-    }
-
-    fn encoder(&self, _conn_id: ConnId, _stream_id: StreamId) -> Self::Encoder {
-        Default::default()
-    }
-
-    async fn process_inbound_msg(
-        &self,
-        conn_id: ConnId,
-        stream_id: StreamId,
-        message: Self::InboundMsg,
-    ) -> io::Result<()> {
-        info!(
-            "got a message from {:#x} on {}: {:?}",
-            conn_id, stream_id, message
-        );
-
-        Ok(())
-    }
-
-    async fn process_datagram(&self, source: ConnId, datagram: Bytes) -> io::Result<()> {
-        info!("got a datagram from {:#x}: {:?}", source, datagram);
-
-        Ok(())
-    }
-}
 
 // a temporary test that only checks that the server side "basically works"
 #[tokio::test]
 async fn temp_server_side_comms() {
     // a node in server mode
     let (server_cfg, server_cert) = common::server_config_and_cert();
-    let node = TestNode(Node::new(Config::new(None, Some(server_cfg))));
+    let node = common::TestNode(Node::new(Config::new(None, Some(server_cfg))));
     let node_addr = node.start("127.0.0.1:0".parse().unwrap()).await.unwrap();
 
     // a client endpoint
@@ -121,7 +76,7 @@ async fn temp_client_side_comms() {
     let server_addr = server.local_addr().unwrap();
 
     // a client node
-    let node = TestNode(Node::new(Config::new(Some(client_cfg), None)));
+    let node = common::TestNode(Node::new(Config::new(Some(client_cfg), None)));
     let node_addr = node.start("127.0.0.1:0".parse().unwrap()).await.unwrap();
 
     assert!(server
