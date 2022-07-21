@@ -1,5 +1,9 @@
 # 0.3.0
 
+### Added
+
+- `Quickie::num_connections`
+
 ### Fixed
 
 - the inbound stream/datagram handlers now close when there's a connection error

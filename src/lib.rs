@@ -262,6 +262,11 @@ where
         }
     }
 
+    /// Returns the number of live [Connection]s.
+    fn num_connections(&self) -> usize {
+        self.node().conns.read().len()
+    }
+
     /// Returns a list of live [Connection]s.
     fn get_connections(&self) -> Vec<Connection> {
         self.node()
