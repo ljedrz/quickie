@@ -435,7 +435,10 @@ where
                         trace!("received a unidir stream from {:#x}", conn_id);
                         node.handle_recv_stream(conn_id, recv_stream).await;
                     }
-                    Err(e) => error!("unidir stream error from {:#x}: {}", conn_id, e),
+                    Err(e) => {
+                        error!("unidir stream error from {:#x}: {}", conn_id, e);
+                        break;
+                    }
                 }
             }
         });
@@ -459,7 +462,10 @@ where
                         node.handle_send_stream(conn_id, send_stream).await;
                         node.handle_recv_stream(conn_id, recv_stream).await;
                     }
-                    Err(e) => error!("bidir stream error from {:#x}: {}", conn_id, e),
+                    Err(e) => {
+                        error!("bidir stream error from {:#x}: {}", conn_id, e);
+                        break;
+                    }
                 }
             }
         });
@@ -483,7 +489,10 @@ where
                             error!("failed to process a datagram from {:#x}: {}", conn_id, e);
                         }
                     }
-                    Err(e) => error!("incoming datagram error from {:#x}: {}", conn_id, e),
+                    Err(e) => {
+                        error!("incoming datagram error from {:#x}: {}", conn_id, e);
+                        break;
+                    }
                 }
             }
         });

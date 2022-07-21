@@ -1,3 +1,9 @@
+# 0.3.0
+
+### Fixed
+
+- the inbound stream/datagram handlers now close when there's a connection error
+
 # 0.2.0
 
 ### Added
