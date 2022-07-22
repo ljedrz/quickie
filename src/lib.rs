@@ -386,7 +386,7 @@ where
             );
 
             let (msg_tx, mut msg_rx) = mpsc::unbounded_channel();
-            if let Some(conn) = node.node().conns.write().get(&conn_id) {
+            if let Some(conn) = node.node().conns.read().get(&conn_id) {
                 conn.senders.write().insert(stream_id, msg_tx);
             } else {
                 return;
