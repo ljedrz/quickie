@@ -261,6 +261,15 @@ where
 
             conn.conn.close(error_code, reason);
 
+            for stream in conn.streams.write().values() {
+                if let Some(ref handle) = stream.recv_task {
+                    handle.abort();
+                }
+                if let Some(ref handle) = stream.send_task {
+                    handle.abort();
+                }
+            }
+
             for task in conn.tasks.lock().drain(..) {
                 task.abort();
             }
