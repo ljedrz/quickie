@@ -4,10 +4,18 @@
 
 - `Quickie::num_connections`: returns the number of live connections
 - `Quickie::close_stream`: closes the specified stream
+- `Quickie::get_stream_ids`: returns the list of stream IDs associated with a connection
+- `Quickie::get_stream_stats`: returns the list of active streams associated with a connection
+- `StreamStats`: a set of simple statistics related to a stream
+
+### Changed
+
+- `Quickie::open_bi` now only returns a single stream ID
 
 ### Fixed
 
 - the inbound stream/datagram handlers now close when there's a connection error
+- the bidirectional stream's send task's handle is no longer accidentally overwritten
 
 # 0.2.0
 
