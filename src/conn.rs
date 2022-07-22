@@ -5,8 +5,12 @@ use quinn::{Connection, StreamId};
 use quinn_proto::{Dir, Side};
 use tokio::{sync::mpsc, task::JoinHandle};
 
+use crate::stats::StreamStatsInner;
+
 /// The stable ID of a connection.
 pub type ConnId = usize;
+
+pub(crate) type Streams = RwLock<HashMap<StreamId, Stream>>;
 
 /// A wrapper providing a Display impl for the stable connection ID and stream ID.
 pub(crate) struct Sid(pub ConnId, pub StreamId);
@@ -32,7 +36,7 @@ type OutboundMsgSender = mpsc::UnboundedSender<WrappedOutboundMsg>;
 
 pub(crate) struct Conn {
     pub(crate) conn: Connection,
-    pub(crate) streams: Arc<RwLock<HashMap<StreamId, Stream>>>,
+    pub(crate) streams: Arc<Streams>,
     pub(crate) tasks: Arc<Mutex<Vec<JoinHandle<()>>>>,
 }
 
@@ -59,4 +63,5 @@ pub(crate) struct Stream {
     pub(crate) recv_task: Option<JoinHandle<()>>,
     pub(crate) send_task: Option<JoinHandle<()>>,
     pub(crate) msg_sender: Option<OutboundMsgSender>,
+    pub(crate) stats: Arc<StreamStatsInner>,
 }

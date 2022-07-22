@@ -1,4 +1,7 @@
-use std::io;
+use std::{
+    io,
+    sync::atomic::{AtomicU64, Ordering::Relaxed},
+};
 
 use bytes::BytesMut;
 use futures_util::SinkExt;
@@ -55,4 +58,50 @@ pub(crate) async fn counting_send<
     let len = framed.write_buffer().len();
     framed.flush().await?;
     Ok(len)
+}
+
+#[derive(Default)]
+pub(crate) struct StreamStatsInner {
+    /// The number of all messages sent.
+    msgs_sent: AtomicU64,
+    /// The number of all messages received.
+    msgs_recv: AtomicU64,
+    /// The number of all bytes sent.
+    bytes_sent: AtomicU64,
+    /// The number of all bytes received.
+    bytes_recv: AtomicU64,
+}
+
+impl StreamStatsInner {
+    pub(crate) fn register_msg_rx(&self, size: usize) {
+        self.msgs_recv.fetch_add(1, Relaxed);
+        self.bytes_recv.fetch_add(size as u64, Relaxed);
+    }
+
+    pub(crate) fn register_msg_tx(&self, size: usize) {
+        self.msgs_sent.fetch_add(1, Relaxed);
+        self.bytes_sent.fetch_add(size as u64, Relaxed);
+    }
+
+    pub(crate) fn get_stats(&self) -> StreamStats {
+        StreamStats {
+            msgs_sent: self.msgs_sent.load(Relaxed),
+            msgs_recv: self.msgs_recv.load(Relaxed),
+            bytes_sent: self.bytes_sent.load(Relaxed),
+            bytes_recv: self.bytes_recv.load(Relaxed),
+        }
+    }
+}
+
+/// A set of simple statistics related to a stream.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamStats {
+    /// The number of all messages sent.
+    pub msgs_sent: u64,
+    /// The number of all messages received.
+    pub msgs_recv: u64,
+    /// The number of all bytes sent.
+    pub bytes_sent: u64,
+    /// The number of all bytes received.
+    pub bytes_recv: u64,
 }

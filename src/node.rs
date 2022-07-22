@@ -2,10 +2,10 @@ use std::{collections::HashMap, io, ops::Deref, sync::Arc};
 
 use once_cell::race::OnceBox;
 use parking_lot::{Mutex, RwLock};
-use quinn::{ClientConfig, Endpoint, ServerConfig};
+use quinn::{ClientConfig, Endpoint, ServerConfig, StreamId};
 use tokio::task::JoinHandle;
 
-use crate::conn::{Conn, ConnId};
+use crate::conn::{Conn, ConnId, Streams};
 
 /// Contains objects providing P2P networking capabilities.
 #[derive(Clone)]
@@ -54,6 +54,28 @@ impl Node {
     pub(crate) fn register_conn_task(&self, conn_id: ConnId, handle: JoinHandle<()>) {
         if let Some(tasks) = self.conns.read().get(&conn_id).map(|c| c.tasks.clone()) {
             tasks.lock().push(handle);
+        }
+    }
+
+    pub(crate) fn get_streams(&self, conn_id: ConnId) -> Option<Arc<Streams>> {
+        self.conns.read().get(&conn_id).map(|c| c.streams.clone())
+    }
+
+    pub(crate) fn register_msg_rx(&self, conn_id: ConnId, stream_id: StreamId, size: usize) {
+        if let Some(stats) = self
+            .get_streams(conn_id)
+            .and_then(|streams| streams.read().get(&stream_id).map(|s| s.stats.clone()))
+        {
+            stats.register_msg_rx(size);
+        }
+    }
+
+    pub(crate) fn register_msg_tx(&self, conn_id: ConnId, stream_id: StreamId, size: usize) {
+        if let Some(stats) = self
+            .get_streams(conn_id)
+            .and_then(|streams| streams.read().get(&stream_id).map(|s| s.stats.clone()))
+        {
+            stats.register_msg_tx(size);
         }
     }
 }

@@ -28,6 +28,7 @@ use crate::stats::{counting_send, CountingDecoder};
 pub use crate::{
     conn::ConnId,
     node::{Config, Node},
+    stats::StreamStats,
 };
 pub use quinn::{Connection, VarInt};
 
@@ -296,6 +297,23 @@ where
             .map(|c| c.conn.clone())
     }
 
+    /// Returns a list of stream IDs corresponding to the given connection ID.
+    fn get_stream_ids(&self, conn_id: ConnId) -> Option<Vec<StreamId>> {
+        self.node()
+            .conns
+            .read()
+            .get(&conn_id)
+            .map(|conn| conn.streams.clone())
+            .map(|streams| streams.read().keys().copied().collect())
+    }
+
+    /// Returns simple statistics related to the specified stream.
+    fn get_stream_stats(&self, conn_id: ConnId, stream_id: StreamId) -> Option<StreamStats> {
+        self.node()
+            .get_streams(conn_id)
+            .and_then(|streams| streams.read().get(&stream_id).map(|s| s.stats.get_stats()))
+    }
+
     #[doc(hidden)]
     async fn process_conn(&self, conn: Connecting) -> io::Result<ConnId> {
         let addr = conn.remote_address();
@@ -353,11 +371,13 @@ where
             let framed = FramedRead::new(stream, decoder);
             let mut framed = framed.map_decoder(CountingDecoder::new);
 
-            tx.send(()).unwrap();
+            let _ = rx.await;
 
             while let Some(item) = framed.next().await {
                 match item {
                     Ok((msg, msg_size)) => {
+                        node.node().register_msg_rx(conn_id, stream_id, msg_size);
+
                         trace!(
                             "isolated a {}B message from {}",
                             msg_size,
@@ -385,11 +405,11 @@ where
             debug!("recv stream {} was closed", Sid(conn_id, stream_id));
         });
 
-        let _ = rx.await;
-
         if let Some(conn) = self.node().conns.read().get(&conn_id) {
             conn.register_recv_stream(stream_id, task);
         }
+
+        tx.send(()).unwrap();
     }
 
     #[doc(hidden)]
@@ -408,13 +428,15 @@ where
             let codec = node.encoder(conn_id, stream_id);
             let mut framed = FramedWrite::new(stream, codec);
 
-            tx.send(()).unwrap();
+            let _ = rx.await;
 
             while let Some(msg) = msg_rx.recv().await {
                 let msg = *msg.downcast().unwrap();
 
                 match counting_send(&mut framed, msg).await {
                     Ok(msg_size) => {
+                        node.node().register_msg_tx(conn_id, stream_id, msg_size);
+
                         trace!(
                             "sent a {}B message to {}",
                             msg_size,
@@ -435,11 +457,11 @@ where
             debug!("send stream {} was closed", Sid(conn_id, stream_id));
         });
 
-        let _ = rx.await;
-
         if let Some(conn) = self.node().conns.read().get(&conn_id) {
             conn.register_send_stream(stream_id, task, msg_tx);
         }
+
+        tx.send(()).unwrap();
     }
 
     /// Closes the given stream.
