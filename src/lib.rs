@@ -255,7 +255,7 @@ where
 
     /// Disconnects the node from a connection with the given stable ID; the `error_code` and
     /// the `reason` are the same as in [quinn](https://docs.rs/quinn/latest/quinn/struct.Connection.html#method.close).
-    async fn disconnect(&self, conn_id: ConnId, error_code: VarInt, reason: &[u8]) -> bool {
+    fn disconnect(&self, conn_id: ConnId, error_code: VarInt, reason: &[u8]) -> bool {
         if let Some(conn) = self.node().conns.write().remove(&conn_id) {
             debug!("disconnecting from {:#x}", conn_id);
 
