@@ -43,7 +43,7 @@ async fn temp_server_side_comms() {
 
     let conn_id = node.get_connections().pop().unwrap().stable_id();
     let stream_id = node.open_uni(conn_id).await.unwrap();
-    node.unicast(conn_id, stream_id, Bytes::from_static(msg))
+    node.send_msg(conn_id, stream_id, Bytes::from_static(msg))
         .unwrap();
 
     let mut msg_recv = [0u8; 9];
@@ -102,7 +102,7 @@ async fn temp_client_side_comms() {
         let send_stream_id = node.open_uni(conn_id).await.unwrap();
 
         let msg = b"herp derp";
-        node.unicast(conn_id, send_stream_id, Bytes::from_static(msg))
+        node.send_msg(conn_id, send_stream_id, Bytes::from_static(msg))
             .unwrap();
 
         let mut recv_stream = uni_streams.next().await.unwrap().unwrap();
@@ -117,7 +117,7 @@ async fn temp_client_side_comms() {
         let stream_id = node.open_bi(conn_id).await.unwrap();
 
         let msg = b"herp derp";
-        node.unicast(conn_id, stream_id, Bytes::from_static(msg))
+        node.send_msg(conn_id, stream_id, Bytes::from_static(msg))
             .unwrap();
 
         let (mut send_stream, mut recv_stream) = bi_streams.next().await.unwrap().unwrap();

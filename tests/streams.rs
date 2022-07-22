@@ -44,7 +44,7 @@ async fn streams_uni() {
 
         // send a few messages
         for i in 0..NUM_MESSAGES {
-            node.unicast(conn_id, stream_id, [i, i].to_vec().into())
+            node.send_msg(conn_id, stream_id, [i, i].to_vec().into())
                 .unwrap();
         }
 
@@ -122,7 +122,7 @@ async fn streams_bi() {
 
         // send a few messages
         for i in 0..NUM_MESSAGES {
-            node.unicast(conn_id, stream_id, [i, i].to_vec().into())
+            node.send_msg(conn_id, stream_id, [i, i].to_vec().into())
                 .unwrap();
         }
 
@@ -179,7 +179,7 @@ async fn streams_bi() {
 
         // send a few messages
         for i in 0..NUM_MESSAGES {
-            node.unicast(conn_id, stream_id, [i, i].to_vec().into())
+            node.send_msg(conn_id, stream_id, [i, i].to_vec().into())
                 .unwrap();
         }
 

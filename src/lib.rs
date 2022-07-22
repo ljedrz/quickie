@@ -119,7 +119,7 @@ where
     }
 
     /// Sends the provided message to the specified stream.
-    fn unicast(
+    fn send_msg(
         &self,
         conn_id: ConnId,
         stream_id: StreamId,
