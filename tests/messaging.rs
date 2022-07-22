@@ -196,3 +196,54 @@ async fn streams_bi() {
         }
     }
 }
+
+#[tokio::test]
+async fn datagrams() {
+    // prepare the configs
+    let (client_cfg, server_cfg) = common::client_and_server_config();
+
+    // a node in client-only mode
+    let node = common::TestNode(Node::new(Config::new(Some(client_cfg.clone()), None)));
+    node.start("127.0.0.1:0".parse().unwrap()).await.unwrap();
+
+    // a raw endpoint
+    let (raw_endpoint, mut raw_incoming) = common::raw_endpoint(client_cfg, server_cfg);
+    let raw_endpoint_addr = raw_endpoint.local_addr().unwrap();
+
+    // initiate a connection
+    let conn_id = node
+        .connect(raw_endpoint_addr, common::SERVER_NAME)
+        .await
+        .unwrap();
+
+    // accept it on the raw endpoint side
+    let NewConnection {
+        connection,
+        mut datagrams,
+        ..
+    } = raw_incoming.next().await.unwrap().await.unwrap();
+
+    // outbound
+    {
+        // send a few datagrams
+        for i in 0..NUM_MESSAGES {
+            node.send_datagram(conn_id, [i, i].to_vec().into()).unwrap();
+        }
+
+        // check if the raw endpoint got all of the datagrams
+        for i in 0..NUM_MESSAGES {
+            assert_eq!(&datagrams.next().await.unwrap().unwrap(), &[i, i][..]);
+        }
+    }
+
+    // inbound
+    {
+        // send a few datagrams
+        for i in 0..NUM_MESSAGES {
+            connection.send_datagram([i, i].to_vec().into()).unwrap();
+        }
+
+        // TODO: determine what to do about datagram stats
+        sleep(Duration::from_millis(50)).await
+    }
+}

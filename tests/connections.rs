@@ -3,8 +3,11 @@
 
 mod common;
 
+use std::time::Duration;
+
 use futures_util::StreamExt;
 use quickie::*;
+use tokio::time::timeout;
 
 #[tokio::test]
 #[should_panic]
@@ -62,11 +65,15 @@ async fn conns_client_only() {
     let raw_endpoint_addr = raw_endpoint.local_addr().unwrap();
 
     // a client-only node can't accept a connection
-    assert!(raw_endpoint
-        .connect(node_addr, common::SERVER_NAME)
-        .unwrap()
-        .await
-        .is_err());
+    // impose a timeout, as it takes 3s otherwise
+    assert!(timeout(
+        Duration::from_millis(50),
+        raw_endpoint
+            .connect(node_addr, common::SERVER_NAME)
+            .unwrap()
+    )
+    .await
+    .is_err());
 
     // a client-only node can initiate a connection
     let conn_id = node
