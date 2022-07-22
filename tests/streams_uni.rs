@@ -13,8 +13,6 @@ const NUM_MESSAGES: u8 = 3;
 
 #[tokio::test]
 async fn streams_uni() {
-    common::start_logger();
-
     // prepare the configs
     let (client_cfg, server_cfg) = common::client_and_server_config();
 

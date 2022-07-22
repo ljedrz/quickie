@@ -22,7 +22,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite};
 use tracing::*;
 
-use crate::conn::{Conn, Sid};
+use crate::conn::{Conn, Sid, WrappedOutboundMsg};
 use crate::stats::{counting_send, CountingDecoder};
 
 pub use crate::{
@@ -124,28 +124,35 @@ where
         stream_id: StreamId,
         msg: Self::OutboundMsg,
     ) -> io::Result<()> {
-        if let Some(senders) = self
+        if let Some(streams) = self
             .node()
             .conns
             .read()
             .get(&conn_id)
-            .map(|c| c.senders.clone())
+            .map(|c| c.streams.clone())
         {
-            if let Some(tx) = senders.read().get(&stream_id) {
-                if tx.send(Box::new(msg)).is_err() {
-                    error!(
-                        "send stream {} is known, but its channel is closed",
-                        Sid(conn_id, stream_id)
-                    );
-                    senders.write().remove(&stream_id);
+            if let Some(stream) = streams.read().get(&stream_id) {
+                if let Some(tx) = &stream.msg_sender {
+                    if tx.send(Box::new(msg)).is_err() {
+                        error!(
+                            "send stream {} is known, but its channel is closed",
+                            Sid(conn_id, stream_id)
+                        );
+                        streams.write().remove(&stream_id);
 
+                        Err(io::Error::new(
+                            io::ErrorKind::Other,
+                            format!("stream {} is broken", Sid(conn_id, stream_id)),
+                        ))
+                    } else {
+                        // TODO: provide an rx for stricter delivery tracking
+                        Ok(())
+                    }
+                } else {
                     Err(io::Error::new(
                         io::ErrorKind::Other,
-                        format!("stream {} is broken", Sid(conn_id, stream_id)),
+                        format!("{} is not a send stream", Sid(conn_id, stream_id)),
                     ))
-                } else {
-                    // TODO: provide an rx for stricter delivery tracking
-                    Ok(())
                 }
             } else {
                 Err(io::Error::new(
@@ -321,7 +328,7 @@ where
 
         let conn = Conn {
             conn: connection,
-            senders: Default::default(),
+            streams: Default::default(),
             tasks: Default::default(),
         };
 
@@ -332,11 +339,11 @@ where
 
     #[doc(hidden)]
     async fn handle_recv_stream(&self, conn_id: ConnId, stream: RecvStream) {
+        let stream_id = stream.id();
+
         let (tx, rx) = oneshot::channel();
         let node = self.clone();
         let task = tokio::spawn(async move {
-            let stream_id = stream.id();
-
             trace!(
                 "starting a handler task for recv stream {}",
                 Sid(conn_id, stream_id)
@@ -379,27 +386,24 @@ where
         });
 
         let _ = rx.await;
-        self.node().register_conn_task(conn_id, task);
+
+        if let Some(conn) = self.node().conns.read().get(&conn_id) {
+            conn.register_recv_stream(stream_id, task);
+        }
     }
 
     #[doc(hidden)]
     async fn handle_send_stream(&self, conn_id: ConnId, stream: SendStream) {
+        let (msg_tx, mut msg_rx) = mpsc::unbounded_channel::<WrappedOutboundMsg>();
+        let stream_id = stream.id();
+
         let (tx, rx) = oneshot::channel();
         let node = self.clone();
         let task = tokio::spawn(async move {
-            let stream_id = stream.id();
-
             trace!(
                 "starting a handler task for send stream {}",
                 Sid(conn_id, stream_id)
             );
-
-            let (msg_tx, mut msg_rx) = mpsc::unbounded_channel();
-            if let Some(conn) = node.node().conns.read().get(&conn_id) {
-                conn.senders.write().insert(stream_id, msg_tx);
-            } else {
-                return;
-            }
 
             let codec = node.encoder(conn_id, stream_id);
             let mut framed = FramedWrite::new(stream, codec);
@@ -423,25 +427,19 @@ where
                             Sid(conn_id, stream_id),
                             e
                         );
+                        break;
                     }
                 }
-            }
-
-            if let Some(senders) = node
-                .node()
-                .conns
-                .read()
-                .get(&conn_id)
-                .map(|c| c.senders.clone())
-            {
-                senders.write().remove(&stream_id);
             }
 
             debug!("send stream {} was closed", Sid(conn_id, stream_id));
         });
 
         let _ = rx.await;
-        self.node().register_conn_task(conn_id, task);
+
+        if let Some(conn) = self.node().conns.read().get(&conn_id) {
+            conn.register_send_stream(stream_id, task, msg_tx);
+        }
     }
 
     #[doc(hidden)]

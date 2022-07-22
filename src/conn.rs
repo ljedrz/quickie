@@ -27,10 +27,36 @@ impl fmt::Display for Sid {
     }
 }
 
-type OutboundMsgSender = mpsc::UnboundedSender<Box<dyn Any + Send>>;
+pub(crate) type WrappedOutboundMsg = Box<dyn Any + Send>;
+type OutboundMsgSender = mpsc::UnboundedSender<WrappedOutboundMsg>;
 
 pub(crate) struct Conn {
     pub(crate) conn: Connection,
-    pub(crate) senders: Arc<RwLock<HashMap<StreamId, OutboundMsgSender>>>,
+    pub(crate) streams: Arc<RwLock<HashMap<StreamId, Stream>>>,
     pub(crate) tasks: Arc<Mutex<Vec<JoinHandle<()>>>>,
+}
+
+impl Conn {
+    pub(crate) fn register_recv_stream(&self, stream_id: StreamId, recv_task: JoinHandle<()>) {
+        self.streams.write().entry(stream_id).or_default().recv_task = Some(recv_task)
+    }
+
+    pub(crate) fn register_send_stream(
+        &self,
+        stream_id: StreamId,
+        send_task: JoinHandle<()>,
+        msg_sender: OutboundMsgSender,
+    ) {
+        let mut streams = self.streams.write();
+        let stream = streams.entry(stream_id).or_default();
+        stream.send_task = Some(send_task);
+        stream.msg_sender = Some(msg_sender);
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct Stream {
+    pub(crate) recv_task: Option<JoinHandle<()>>,
+    pub(crate) send_task: Option<JoinHandle<()>>,
+    pub(crate) msg_sender: Option<OutboundMsgSender>,
 }
