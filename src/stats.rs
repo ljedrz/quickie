@@ -1,5 +1,9 @@
+use std::io;
+
 use bytes::BytesMut;
-use tokio_util::codec::Decoder;
+use futures_util::SinkExt;
+use tokio::io::AsyncWrite;
+use tokio_util::codec::{Decoder, Encoder, FramedWrite};
 
 /// A wrapper [`Decoder`] that also counts the bytes belonging to the inbound messages.
 pub(crate) struct CountingDecoder<D: Decoder> {
@@ -37,4 +41,18 @@ impl<D: Decoder> Decoder for CountingDecoder<D> {
             Ok(None)
         }
     }
+}
+
+pub(crate) async fn counting_send<
+    T: Send,
+    W: AsyncWrite + Unpin,
+    E: Encoder<T, Error = io::Error>,
+>(
+    framed: &mut FramedWrite<W, E>,
+    item: T,
+) -> io::Result<usize> {
+    framed.feed(item).await?;
+    let len = framed.write_buffer().len();
+    framed.flush().await?;
+    Ok(len)
 }

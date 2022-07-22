@@ -13,7 +13,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::StreamExt;
 use quinn::{
     Connecting, Datagrams, Endpoint, IncomingBiStreams, IncomingUniStreams, NewConnection,
     RecvStream, SendStream, StreamId,
@@ -23,7 +23,7 @@ use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite};
 use tracing::*;
 
 use crate::conn::{Conn, Sid};
-use crate::stats::CountingDecoder;
+use crate::stats::{counting_send, CountingDecoder};
 
 pub use crate::{
     conn::ConnId,
@@ -409,12 +409,21 @@ where
             while let Some(msg) = msg_rx.recv().await {
                 let msg = *msg.downcast().unwrap();
 
-                if let Err(e) = framed.send(msg).await {
-                    error!(
-                        "couldn't send a message to {}: {}",
-                        Sid(conn_id, stream_id),
-                        e
-                    );
+                match counting_send(&mut framed, msg).await {
+                    Ok(msg_size) => {
+                        trace!(
+                            "sent a {}B message to {}",
+                            msg_size,
+                            Sid(conn_id, stream_id)
+                        );
+                    }
+                    Err(e) => {
+                        error!(
+                            "couldn't send a message to {}: {}",
+                            Sid(conn_id, stream_id),
+                            e
+                        );
+                    }
                 }
             }
 
