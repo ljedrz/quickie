@@ -5,6 +5,7 @@
 
 mod conn;
 mod node;
+mod stats;
 
 use std::{
     io,
@@ -22,6 +23,8 @@ use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite};
 use tracing::*;
 
 use crate::conn::{Conn, Sid};
+use crate::stats::CountingDecoder;
+
 pub use crate::{
     conn::ConnId,
     node::{Config, Node},
@@ -339,14 +342,20 @@ where
                 Sid(conn_id, stream_id)
             );
 
-            let codec = node.decoder(conn_id, stream_id);
-            let mut framed = FramedRead::new(stream, codec);
+            let decoder = node.decoder(conn_id, stream_id);
+            let framed = FramedRead::new(stream, decoder);
+            let mut framed = framed.map_decoder(CountingDecoder::new);
 
             tx.send(()).unwrap();
 
-            while let Some(bytes) = framed.next().await {
-                match bytes {
-                    Ok(msg) => {
+            while let Some(item) = framed.next().await {
+                match item {
+                    Ok((msg, msg_size)) => {
+                        trace!(
+                            "isolated a {}B message from {}",
+                            msg_size,
+                            Sid(conn_id, stream_id)
+                        );
                         // TODO: send the message to a task dedicated to further processing
                         let node_clone = node.clone();
                         if let Err(e) = node_clone
