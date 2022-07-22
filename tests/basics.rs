@@ -114,10 +114,10 @@ async fn temp_client_side_comms() {
 
     // check a bidirectional stream
     {
-        let (send_stream_id, _recv_stream_id) = node.open_bi(conn_id).await.unwrap();
+        let stream_id = node.open_bi(conn_id).await.unwrap();
 
         let msg = b"herp derp";
-        node.unicast(conn_id, send_stream_id, Bytes::from_static(msg))
+        node.unicast(conn_id, stream_id, Bytes::from_static(msg))
             .unwrap();
 
         let (mut send_stream, mut recv_stream) = bi_streams.next().await.unwrap().unwrap();

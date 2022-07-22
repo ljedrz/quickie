@@ -96,17 +96,17 @@ where
     }
 
     /// Opens a bidirectional stream with the given connection and returns the resulting
-    /// send and receive streams' IDs.
-    async fn open_bi(&self, conn_id: ConnId) -> io::Result<(StreamId, StreamId)> {
+    /// stream ID.
+    async fn open_bi(&self, conn_id: ConnId) -> io::Result<StreamId> {
         if let Some(conn) = self.get_connection(conn_id) {
             match conn.open_bi().await {
                 Ok((send_stream, recv_stream)) => {
-                    let send_stream_id = send_stream.id();
+                    let stream_id = send_stream.id();
+
                     self.handle_send_stream(conn_id, send_stream).await;
-                    let recv_stream_id = recv_stream.id();
                     self.handle_recv_stream(conn_id, recv_stream).await;
 
-                    Ok((send_stream_id, recv_stream_id))
+                    Ok(stream_id)
                 }
                 Err(e) => Err(io::Error::new(io::ErrorKind::Other, e)),
             }
