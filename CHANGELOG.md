@@ -2,7 +2,8 @@
 
 ### Added
 
-- `Quickie::num_connections`
+- `Quickie::num_connections`: returns the number of live connections
+- `Quickie::close_stream`: closes the specified stream
 
 ### Fixed
 

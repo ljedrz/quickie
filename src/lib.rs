@@ -442,6 +442,35 @@ where
         }
     }
 
+    /// Closes the given stream.
+    fn close_stream(&self, conn_id: ConnId, stream_id: StreamId) -> bool {
+        if let Some(streams) = self
+            .node()
+            .conns
+            .read()
+            .get(&conn_id)
+            .map(|c| c.streams.clone())
+        {
+            if let Some(stream) = streams.write().remove(&stream_id) {
+                if let Some(handle) = stream.recv_task {
+                    handle.abort();
+                }
+                if let Some(handle) = stream.send_task {
+                    handle.abort();
+                }
+
+                debug!("stream {} was closed", Sid(conn_id, stream_id));
+                true
+            } else {
+                warn!("stream {} doesn't exist", Sid(conn_id, stream_id));
+                false
+            }
+        } else {
+            warn!("wasn't connected to {:#x}", conn_id);
+            false
+        }
+    }
+
     #[doc(hidden)]
     async fn handle_uni_streams(&self, conn_id: ConnId, mut streams: IncomingUniStreams) {
         let (tx, rx) = oneshot::channel();
