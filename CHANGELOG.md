@@ -1,3 +1,9 @@
+# 0.4.0
+
+### Added
+
+- `quinn::StreamId` is re-exported
+
 # 0.3.0
 
 ### Added

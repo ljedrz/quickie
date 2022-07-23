@@ -16,7 +16,7 @@ use bytes::Bytes;
 use futures_util::StreamExt;
 use quinn::{
     Connecting, Datagrams, Endpoint, IncomingBiStreams, IncomingUniStreams, NewConnection,
-    RecvStream, SendStream, StreamId,
+    RecvStream, SendStream,
 };
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite};
@@ -30,7 +30,7 @@ pub use crate::{
     node::{Config, Node},
     stats::StreamStats,
 };
-pub use quinn::{Connection, VarInt};
+pub use quinn::{Connection, StreamId, VarInt};
 
 /// A trait for objects containing a [Node]; it endows them with P2P networking
 /// capabilities.
