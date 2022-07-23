@@ -36,7 +36,7 @@ tracing = { version = "0.1", default-features = false }
 [dev-dependencies]
 rcgen = "0.9"
 ring = "0.16"
-rustls = { version = "0.20", default-features = false, features = ["quic"] }
+rustls = { version = "0.20", default-features = false, features = ["dangerous_configuration", "quic"] }
 tokio = { version = "1.14", features = ["rt-multi-thread"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "env-filter", "fmt", "parking_lot", "smallvec"] }
 quickie = { path = ".", features = ["test"] } # a workaround to use the `test` feature in tests by default

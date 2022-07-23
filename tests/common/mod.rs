@@ -71,6 +71,28 @@ pub fn start_logger() {
         .init();
 }
 
+struct SkipServerVerification;
+
+impl SkipServerVerification {
+    fn new() -> Arc<Self> {
+        Arc::new(Self)
+    }
+}
+
+impl rustls::client::ServerCertVerifier for SkipServerVerification {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::Certificate,
+        _intermediates: &[rustls::Certificate],
+        _server_name: &rustls::ServerName,
+        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _ocsp_response: &[u8],
+        _now: std::time::SystemTime,
+    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::ServerCertVerified::assertion())
+    }
+}
+
 /// Creates a server config and its corresponding certificate in DER form.
 pub fn server_config_and_cert() -> (ServerConfig, Vec<u8>) {
     let cert = rcgen::generate_simple_self_signed(vec![SERVER_NAME.into()]).unwrap();
@@ -100,10 +122,20 @@ pub fn client_config(server_cert: Vec<u8>) -> ClientConfig {
     config
 }
 
+/// Creates a client config ignoring the server certificate
+pub fn insecure_client_config() -> ClientConfig {
+    let crypto = rustls::ClientConfig::builder()
+        .with_safe_defaults()
+        .with_custom_certificate_verifier(SkipServerVerification::new())
+        .with_no_client_auth();
+
+    ClientConfig::new(Arc::new(crypto))
+}
+
 /// Creates a compatible pair of client and server configs.
 pub fn client_and_server_config() -> (ClientConfig, ServerConfig) {
-    let (server_cfg, server_cert) = server_config_and_cert();
-    let client_cfg = client_config(server_cert);
+    let (server_cfg, _server_cert) = server_config_and_cert();
+    let client_cfg = insecure_client_config();
 
     (client_cfg, server_cfg)
 }
