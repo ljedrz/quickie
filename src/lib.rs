@@ -255,7 +255,7 @@ where
 
             true
         } else {
-            warn!("wasn't connected to {:#x}", conn_id);
+            debug!("wasn't connected to {:#x}", conn_id);
 
             false
         }
