@@ -32,6 +32,12 @@ pub use crate::{
 };
 pub use quinn::{Connection, StreamId, VarInt};
 
+macro_rules! io_err {
+    ($e:expr) => {
+        Err(io::Error::new(io::ErrorKind::Other, $e))
+    };
+}
+
 /// A trait for objects containing a [Node]; it endows them with P2P networking
 /// capabilities.
 #[async_trait::async_trait]
@@ -85,13 +91,10 @@ where
 
                     Ok(stream_id)
                 }
-                Err(e) => Err(io::Error::new(io::ErrorKind::Other, e)),
+                Err(e) => io_err!(e),
             }
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("connection {:#x} doesn't exist", conn_id),
-            ))
+            io_err!(format!("connection {:#x} doesn't exist", conn_id))
         }
     }
 
@@ -108,13 +111,10 @@ where
 
                     Ok(stream_id)
                 }
-                Err(e) => Err(io::Error::new(io::ErrorKind::Other, e)),
+                Err(e) => io_err!(e),
             }
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("connection {:#x} doesn't exist", conn_id),
-            ))
+            io_err!(format!("connection {:#x} doesn't exist", conn_id))
         }
     }
 
@@ -141,31 +141,19 @@ where
                         );
                         streams.write().remove(&stream_id);
 
-                        Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("stream {} is broken", Sid(conn_id, stream_id)),
-                        ))
+                        io_err!(format!("stream {} is broken", Sid(conn_id, stream_id)))
                     } else {
                         // TODO: provide an rx for stricter delivery tracking
                         Ok(())
                     }
                 } else {
-                    Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("{} is not a send stream", Sid(conn_id, stream_id)),
-                    ))
+                    io_err!(format!("{} is not a send stream", Sid(conn_id, stream_id)))
                 }
             } else {
-                Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("stream {} doesn't exist", Sid(conn_id, stream_id)),
-                ))
+                io_err!(format!("stream {} doesn't exist", Sid(conn_id, stream_id)))
             }
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("connection {:#x} doesn't exist", conn_id),
-            ))
+            io_err!(format!("connection {:#x} doesn't exist", conn_id))
         }
     }
 
@@ -175,10 +163,7 @@ where
             conn.send_datagram(datagram)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("connection {:#x} doesn't exist", conn_id),
-            ))
+            io_err!(format!("connection {:#x} doesn't exist", conn_id))
         }
     }
 
