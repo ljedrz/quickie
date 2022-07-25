@@ -125,13 +125,7 @@ where
         stream_id: StreamId,
         msg: Self::OutboundMsg,
     ) -> io::Result<()> {
-        if let Some(streams) = self
-            .node()
-            .conns
-            .read()
-            .get(&conn_id)
-            .map(|c| c.streams.clone())
-        {
+        if let Some(streams) = self.node().get_streams(conn_id) {
             if let Some(stream) = streams.read().get(&stream_id) {
                 if let Some(tx) = &stream.msg_sender {
                     if tx.send(Box::new(msg)).is_err() {
@@ -294,10 +288,7 @@ where
     /// Returns a list of stream IDs corresponding to the given connection ID.
     fn get_stream_ids(&self, conn_id: ConnId) -> Option<Vec<StreamId>> {
         self.node()
-            .conns
-            .read()
-            .get(&conn_id)
-            .map(|conn| conn.streams.clone())
+            .get_streams(conn_id)
             .map(|streams| streams.read().keys().copied().collect())
     }
 
@@ -460,13 +451,7 @@ where
 
     /// Closes the given stream.
     fn close_stream(&self, conn_id: ConnId, stream_id: StreamId) -> bool {
-        if let Some(streams) = self
-            .node()
-            .conns
-            .read()
-            .get(&conn_id)
-            .map(|c| c.streams.clone())
-        {
+        if let Some(streams) = self.node().get_streams(conn_id) {
             if let Some(stream) = streams.write().remove(&stream_id) {
                 if let Some(handle) = stream.recv_task {
                     handle.abort();
