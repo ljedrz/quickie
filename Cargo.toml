@@ -34,6 +34,7 @@ tokio-util = { version = "0.7", features = ["codec"] }
 tracing = { version = "0.1", default-features = false }
 
 [dev-dependencies]
+peak_alloc = "0.1"
 rcgen = "0.9"
 ring = "0.16"
 rustls = { version = "0.20", default-features = false, features = ["dangerous_configuration", "quic"] }
