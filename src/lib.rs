@@ -299,11 +299,13 @@ where
             .and_then(|streams| streams.read().get(&stream_id).map(|s| s.stats.get_stats()))
     }
 
+    /// Performs initial setup of an accepted or initiated connection.
     #[doc(hidden)]
     async fn process_conn(&self, conn: Connecting) -> io::Result<ConnId> {
         let addr = conn.remote_address();
         trace!("finalizing connection with {}", addr);
 
+        // finalize the connection
         let new_conn = conn
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
@@ -322,6 +324,7 @@ where
             ..
         } = new_conn;
 
+        // spawn stream and datagram handlers
         let (n1, n2, n3) = (self.clone(), self.clone(), self.clone());
         tokio::join!(
             n1.handle_uni_streams(conn_id, uni_streams),
@@ -340,11 +343,14 @@ where
         Ok(conn_id)
     }
 
+    /// Spawns a task handling the given recv stream.
     #[doc(hidden)]
     async fn handle_recv_stream(&self, conn_id: ConnId, stream: RecvStream) {
         let stream_id = stream.id();
 
-        let (tx, rx) = oneshot::channel();
+        let (stream_registered_tx, stream_registered_rx) = oneshot::channel();
+        let (task_ready_tx, task_ready_rx) = oneshot::channel();
+
         let node = self.clone();
         let task = tokio::spawn(async move {
             trace!(
@@ -356,7 +362,8 @@ where
             let framed = FramedRead::new(stream, decoder);
             let mut framed = framed.map_decoder(CountingDecoder::new);
 
-            let _ = rx.await;
+            let _ = stream_registered_rx.await;
+            let _ = task_ready_tx.send(());
 
             while let Some(item) = framed.next().await {
                 match item {
@@ -394,15 +401,19 @@ where
             conn.register_recv_stream(stream_id, task);
         }
 
-        tx.send(()).unwrap();
+        stream_registered_tx.send(()).unwrap();
+        let _ = task_ready_rx.await;
     }
 
+    /// Spawns a task handling the given send stream.
     #[doc(hidden)]
     async fn handle_send_stream(&self, conn_id: ConnId, stream: SendStream) {
         let (msg_tx, mut msg_rx) = mpsc::unbounded_channel::<WrappedOutboundMsg>();
         let stream_id = stream.id();
 
-        let (tx, rx) = oneshot::channel();
+        let (stream_registered_tx, stream_registered_rx) = oneshot::channel();
+        let (task_ready_tx, task_ready_rx) = oneshot::channel();
+
         let node = self.clone();
         let task = tokio::spawn(async move {
             trace!(
@@ -413,7 +424,8 @@ where
             let codec = node.encoder(conn_id, stream_id);
             let mut framed = FramedWrite::new(stream, codec);
 
-            let _ = rx.await;
+            let _ = stream_registered_rx.await;
+            let _ = task_ready_tx.send(());
 
             while let Some(msg) = msg_rx.recv().await {
                 let msg = *msg.downcast().unwrap();
@@ -446,7 +458,8 @@ where
             conn.register_send_stream(stream_id, task, msg_tx);
         }
 
-        tx.send(()).unwrap();
+        stream_registered_tx.send(()).unwrap();
+        let _ = task_ready_rx.await;
     }
 
     /// Closes the given stream.
@@ -472,6 +485,7 @@ where
         }
     }
 
+    /// Spawns a task handling inbound uni streams from the given connection.
     #[doc(hidden)]
     async fn handle_uni_streams(&self, conn_id: ConnId, mut streams: IncomingUniStreams) {
         let (tx, rx) = oneshot::channel();
@@ -498,6 +512,7 @@ where
         self.node().register_conn_task(conn_id, task);
     }
 
+    /// Spawns a task handling inbound bi streams from the given connection.
     #[doc(hidden)]
     async fn handle_bi_streams(&self, conn_id: ConnId, mut streams: IncomingBiStreams) {
         let (tx, rx) = oneshot::channel();
@@ -525,6 +540,7 @@ where
         self.node().register_conn_task(conn_id, task);
     }
 
+    /// Spawns a task handling inbound datagrams from the given connection.
     #[doc(hidden)]
     async fn handle_datagrams(&self, conn_id: ConnId, mut datagrams: Datagrams) {
         let (tx, rx) = oneshot::channel();

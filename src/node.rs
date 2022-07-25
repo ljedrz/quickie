@@ -38,6 +38,7 @@ impl Node {
         }))
     }
 
+    /// Returns a handle to the QUIC endpoint.
     pub(crate) fn get_endpoint(&self) -> io::Result<&Endpoint> {
         self.endpoint.get().ok_or_else(|| {
             io::Error::new(
@@ -47,20 +48,24 @@ impl Node {
         })
     }
 
+    /// Registers the given node-level task.
     pub(crate) fn register_task(&self, handle: JoinHandle<()>) {
         self.tasks.lock().push(handle);
     }
 
+    /// Registers the given connection-level task.
     pub(crate) fn register_conn_task(&self, conn_id: ConnId, handle: JoinHandle<()>) {
         if let Some(tasks) = self.conns.read().get(&conn_id).map(|c| c.tasks.clone()) {
             tasks.lock().push(handle);
         }
     }
 
+    /// Returns the list of streams applicable to the given connection.
     pub(crate) fn get_streams(&self, conn_id: ConnId) -> Option<Arc<Streams>> {
         self.conns.read().get(&conn_id).map(|c| c.streams.clone())
     }
 
+    /// Registers an inbound message from the given stream.
     pub(crate) fn register_msg_rx(&self, conn_id: ConnId, stream_id: StreamId, size: usize) {
         if let Some(stats) = self
             .get_streams(conn_id)
@@ -70,6 +75,7 @@ impl Node {
         }
     }
 
+    /// Registers an outbound message to the given stream.
     pub(crate) fn register_msg_tx(&self, conn_id: ConnId, stream_id: StreamId, size: usize) {
         if let Some(stats) = self
             .get_streams(conn_id)

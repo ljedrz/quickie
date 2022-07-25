@@ -46,6 +46,7 @@ impl<D: Decoder> Decoder for CountingDecoder<D> {
     }
 }
 
+/// A helper function counting the bytes written to a `FramedWrite`.
 pub(crate) async fn counting_send<
     T: Send,
     W: AsyncWrite + Unpin,
@@ -60,6 +61,7 @@ pub(crate) async fn counting_send<
     Ok(len)
 }
 
+/// The internal representation of a stream's stats.
 #[derive(Default)]
 pub(crate) struct StreamStatsInner {
     /// The number of all messages sent.

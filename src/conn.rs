@@ -10,6 +10,7 @@ use crate::stats::StreamStatsInner;
 /// The stable ID of a connection.
 pub type ConnId = usize;
 
+/// The set of streams belonging to a connection.
 pub(crate) type Streams = RwLock<HashMap<StreamId, Stream>>;
 
 /// A wrapper providing a Display impl for the stable connection ID and stream ID.
@@ -34,6 +35,7 @@ impl fmt::Display for Sid {
 pub(crate) type WrappedOutboundMsg = Box<dyn Any + Send>;
 type OutboundMsgSender = mpsc::UnboundedSender<WrappedOutboundMsg>;
 
+/// An object representing a QUIC connection.
 pub(crate) struct Conn {
     pub(crate) conn: Connection,
     pub(crate) streams: Arc<Streams>,
@@ -41,10 +43,12 @@ pub(crate) struct Conn {
 }
 
 impl Conn {
+    /// Registers a recv stream with the connection.
     pub(crate) fn register_recv_stream(&self, stream_id: StreamId, recv_task: JoinHandle<()>) {
         self.streams.write().entry(stream_id).or_default().recv_task = Some(recv_task)
     }
 
+    /// Registers a send stream with the connection.
     pub(crate) fn register_send_stream(
         &self,
         stream_id: StreamId,
@@ -58,6 +62,7 @@ impl Conn {
     }
 }
 
+/// Represents a QUIC stream, both bi/uni.
 #[derive(Default)]
 pub(crate) struct Stream {
     pub(crate) recv_task: Option<JoinHandle<()>>,
