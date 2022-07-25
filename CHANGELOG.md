@@ -4,6 +4,10 @@
 
 - `quinn::StreamId` is re-exported
 
+### Changed
+
+- `Quickie::disconnect` is now `async`
+
 # 0.3.0
 
 ### Added
@@ -17,7 +21,7 @@
 ### Changed
 
 - `Quickie::open_bi` now only returns a single stream ID
-- `Quickie::disconnect` is no longer `async`
+- `Quickie::disconnect` is no longer `async` (it wasn't used)
 - renamed `Quickie::unicast` to `::send_msg` (to be more aligned with `::send_datagram`)
 
 ### Fixed

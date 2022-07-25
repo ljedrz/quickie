@@ -8,7 +8,7 @@ mod node;
 mod stats;
 
 use std::{
-    io,
+    io, mem,
     net::{SocketAddr, UdpSocket},
 };
 
@@ -234,23 +234,30 @@ where
 
     /// Disconnects the node from a connection with the given stable ID; the `error_code` and
     /// the `reason` are the same as in [quinn](https://docs.rs/quinn/latest/quinn/struct.Connection.html#method.close).
-    fn disconnect(&self, conn_id: ConnId, error_code: VarInt, reason: &[u8]) -> bool {
-        if let Some(conn) = self.node().conns.write().remove(&conn_id) {
+    async fn disconnect(&self, conn_id: ConnId, error_code: VarInt, reason: &[u8]) -> bool {
+        let conn = self.node().conns.write().remove(&conn_id);
+
+        if let Some(conn) = conn {
             debug!("disconnecting from {:#x}", conn_id);
 
             conn.conn.close(error_code, reason);
 
-            for stream in conn.streams.write().values() {
-                if let Some(ref handle) = stream.recv_task {
+            let streams = mem::take(&mut *conn.streams.write());
+            for (_id, stream) in streams {
+                if let Some(handle) = stream.recv_task {
                     handle.abort();
+                    let _ = handle.await;
                 }
-                if let Some(ref handle) = stream.send_task {
+                if let Some(handle) = stream.send_task {
                     handle.abort();
+                    let _ = handle.await;
                 }
             }
 
-            for task in conn.tasks.lock().drain(..) {
+            let tasks = mem::take(&mut *conn.tasks.lock());
+            for task in tasks {
                 task.abort();
+                let _ = task.await;
             }
 
             true

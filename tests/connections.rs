@@ -47,7 +47,7 @@ async fn conns_server_only() {
     let conn_id = node.get_connections().pop().unwrap().stable_id();
 
     // check a node-side disconnect
-    assert!(node.disconnect(conn_id, Default::default(), &[0]));
+    assert!(node.disconnect(conn_id, Default::default(), &[0]).await);
     assert!(node.get_connection(conn_id).is_none());
 }
 
@@ -85,7 +85,7 @@ async fn conns_client_only() {
     assert!(raw_incoming.next().await.unwrap().await.is_ok());
 
     // check a node-side disconnect
-    assert!(node.disconnect(conn_id, Default::default(), &[0]));
+    assert!(node.disconnect(conn_id, Default::default(), &[0]).await);
     assert!(node.get_connection(conn_id).is_none());
 }
 
@@ -115,7 +115,7 @@ async fn conns_client_plus_server() {
     assert!(raw_incoming.next().await.unwrap().await.is_ok());
 
     // check a node-side disconnect
-    assert!(node.disconnect(conn_id, Default::default(), &[0]));
+    assert!(node.disconnect(conn_id, Default::default(), &[0]).await);
     assert!(node.get_connection(conn_id).is_none());
 
     // a client+server node can accept a connection
@@ -130,6 +130,6 @@ async fn conns_client_plus_server() {
     let conn_id = node.get_connections().pop().unwrap().stable_id();
 
     // check a node-side disconnect
-    assert!(node.disconnect(conn_id, Default::default(), &[0]));
+    assert!(node.disconnect(conn_id, Default::default(), &[0]).await);
     assert!(node.get_connection(conn_id).is_none());
 }

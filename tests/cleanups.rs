@@ -82,10 +82,7 @@ async fn cleanups_conns() {
             send_stream.write_all(b"herp derp").await.unwrap();
         }
 
-        // TODO: try to avoid this sleep
-        sleep(Duration::from_millis(1)).await;
-
-        assert!(node.disconnect(conn_id, Default::default(), &[]));
+        assert!(node.disconnect(conn_id, Default::default(), &[]).await);
 
         raw_new_conn.connection.close(Default::default(), &[]);
         raw_endpoint.close(Default::default(), &[]);
