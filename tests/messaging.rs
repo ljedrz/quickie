@@ -4,6 +4,7 @@ mod common;
 
 use std::time::Duration;
 
+use deadline::deadline;
 use futures_util::StreamExt;
 use quickie::*;
 use quinn::NewConnection;
@@ -48,8 +49,9 @@ async fn streams_uni() {
                 .unwrap();
         }
 
-        wait_until!(1, {
-            let stats = node.get_stream_stats(conn_id, stream_id).unwrap();
+        let node_clone = node.clone();
+        deadline!(Duration::from_secs(1), move || {
+            let stats = node_clone.get_stream_stats(conn_id, stream_id).unwrap();
             stats.msgs_sent == NUM_MESSAGES as u64 && stats.bytes_sent == NUM_MESSAGES as u64 * 2
         });
 
@@ -82,8 +84,9 @@ async fn streams_uni() {
         assert_eq!(stream_ids.len(), 1);
         let stream_id = stream_ids.pop().unwrap();
 
-        wait_until!(1, {
-            let stats = node.get_stream_stats(conn_id, stream_id).unwrap();
+        let node_clone = node.clone();
+        deadline!(Duration::from_secs(1), move || {
+            let stats = node_clone.get_stream_stats(conn_id, stream_id).unwrap();
             stats.msgs_recv == NUM_MESSAGES as u64 && stats.bytes_recv == NUM_MESSAGES as u64 * 2
         });
     }
@@ -126,8 +129,9 @@ async fn streams_bi() {
                 .unwrap();
         }
 
-        wait_until!(1, {
-            let stats = node.get_stream_stats(conn_id, stream_id).unwrap();
+        let node_clone = node.clone();
+        deadline!(Duration::from_secs(1), move || {
+            let stats = node_clone.get_stream_stats(conn_id, stream_id).unwrap();
             stats.msgs_sent == NUM_MESSAGES as u64 && stats.bytes_sent == NUM_MESSAGES as u64 * 2
         });
 
@@ -148,8 +152,9 @@ async fn streams_bi() {
             sleep(Duration::from_millis(1)).await;
         }
 
-        wait_until!(1, {
-            let stats = node.get_stream_stats(conn_id, stream_id).unwrap();
+        let node_clone = node.clone();
+        deadline!(Duration::from_secs(1), move || {
+            let stats = node_clone.get_stream_stats(conn_id, stream_id).unwrap();
             stats.msgs_recv == NUM_MESSAGES as u64 && stats.bytes_recv == NUM_MESSAGES as u64 * 2
         });
 
@@ -172,8 +177,9 @@ async fn streams_bi() {
         assert_eq!(stream_ids.len(), 1);
         let stream_id = stream_ids.pop().unwrap();
 
-        wait_until!(1, {
-            let stats = node.get_stream_stats(conn_id, stream_id).unwrap();
+        let node_clone = node.clone();
+        deadline!(Duration::from_secs(1), move || {
+            let stats = node_clone.get_stream_stats(conn_id, stream_id).unwrap();
             stats.msgs_recv == NUM_MESSAGES as u64 && stats.bytes_recv == NUM_MESSAGES as u64 * 2
         });
 
@@ -183,8 +189,9 @@ async fn streams_bi() {
                 .unwrap();
         }
 
-        wait_until!(1, {
-            let stats = node.get_stream_stats(conn_id, stream_id).unwrap();
+        let node_clone = node.clone();
+        deadline!(Duration::from_secs(1), move || {
+            let stats = node_clone.get_stream_stats(conn_id, stream_id).unwrap();
             stats.msgs_recv == NUM_MESSAGES as u64 && stats.bytes_recv == NUM_MESSAGES as u64 * 2
         });
 

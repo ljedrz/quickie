@@ -3,6 +3,7 @@ mod common;
 use std::time::Duration;
 
 use bytes::Bytes;
+use deadline::deadline;
 use futures_util::StreamExt;
 use peak_alloc::PeakAlloc;
 use quickie::*;
@@ -66,7 +67,9 @@ async fn cleanups_conns() {
                 .await
                 .unwrap();
 
-            wait_until!(1, node.num_connections() == 1);
+            let node_clone = node.clone();
+            deadline!(Duration::from_secs(1), move || node_clone.num_connections()
+                == 1);
             let conn_id = node.get_connections().pop().unwrap().stable_id();
 
             (conn_id, raw_new_conn)
@@ -84,11 +87,14 @@ async fn cleanups_conns() {
 
         assert!(node.disconnect(conn_id, Default::default(), &[]).await);
 
+        // TODO: try to avoid this sleep
+        sleep(Duration::from_millis(10)).await;
+
         raw_new_conn.connection.close(Default::default(), &[]);
         raw_endpoint.close(Default::default(), &[]);
 
         // TODO: try to avoid this sleep
-        sleep(Duration::from_millis(5)).await;
+        sleep(Duration::from_millis(20)).await;
 
         // obtain and record current memory use
         let current_heap_use = PEAK_ALLOC.current_usage();

@@ -5,6 +5,7 @@ mod common;
 
 use std::time::Duration;
 
+use deadline::deadline;
 use futures_util::StreamExt;
 use quickie::*;
 use tokio::time::timeout;
@@ -43,7 +44,9 @@ async fn conns_server_only() {
         .is_ok());
 
     // find the inbound connection
-    wait_until!(1, node.num_connections() == 1);
+    let node_clone = node.clone();
+    deadline!(Duration::from_secs(1), move || node_clone.num_connections()
+        == 1);
     let conn_id = node.get_connections().pop().unwrap().stable_id();
 
     // check a node-side disconnect
@@ -126,7 +129,9 @@ async fn conns_client_plus_server() {
         .is_ok());
 
     // find the inbound connection
-    wait_until!(1, node.num_connections() == 1);
+    let node_clone = node.clone();
+    deadline!(Duration::from_secs(1), move || node_clone.num_connections()
+        == 1);
     let conn_id = node.get_connections().pop().unwrap().stable_id();
 
     // check a node-side disconnect
