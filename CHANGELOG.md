@@ -7,6 +7,7 @@
 ### Changed
 
 - `Quickie::disconnect` is now `async`
+- updated `quinn` and `quinn-proto` to `0.9`
 
 # 0.3.0
 

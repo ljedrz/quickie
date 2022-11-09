@@ -1,17 +1,17 @@
 #![allow(unused)]
 
-use std::{io, sync::Arc};
+use std::{io, sync::Arc, time::Duration};
 
 use bytes::{Bytes, BytesMut};
 use quickie::{ConnId, Node, Quickie};
-use quinn::{ClientConfig, Endpoint, Incoming, ServerConfig, StreamId, VarInt};
+use quinn::{ClientConfig, Endpoint, ServerConfig, StreamId, TransportConfig};
 use tokio_util::codec::BytesCodec;
 use tracing::*;
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 
 pub const SERVER_NAME: &str = "test_server";
 
-const MAX_IDLE_TIMEOUT_MS: u32 = 250;
+const MAX_IDLE_TIMEOUT_MS: u64 = 250;
 
 /// A basic test node.
 #[derive(Clone)]
@@ -100,11 +100,15 @@ pub fn server_config_and_cert() -> (ServerConfig, Vec<u8>) {
     let priv_key = cert.serialize_private_key_der();
     let priv_key = rustls::PrivateKey(priv_key);
     let cert_chain = vec![rustls::Certificate(cert_der.clone())];
-    let mut config = ServerConfig::with_single_cert(cert_chain, priv_key).unwrap();
 
-    Arc::get_mut(&mut config.transport)
-        .unwrap()
-        .max_idle_timeout(Some(VarInt::from_u32(MAX_IDLE_TIMEOUT_MS).into()));
+    let mut config = ServerConfig::with_single_cert(cert_chain, priv_key).unwrap();
+    let mut transport_cfg = TransportConfig::default();
+    transport_cfg.max_idle_timeout(Some(
+        Duration::from_millis(MAX_IDLE_TIMEOUT_MS)
+            .try_into()
+            .unwrap(),
+    ));
+    config.transport_config(Arc::new(transport_cfg));
 
     (config, cert_der)
 }
@@ -113,11 +117,15 @@ pub fn server_config_and_cert() -> (ServerConfig, Vec<u8>) {
 pub fn client_config(server_cert: Vec<u8>) -> ClientConfig {
     let mut certs = rustls::RootCertStore::empty();
     certs.add(&rustls::Certificate(server_cert)).unwrap();
-    let mut config = ClientConfig::with_root_certificates(certs);
 
-    Arc::get_mut(&mut config.transport)
-        .unwrap()
-        .max_idle_timeout(Some(VarInt::from_u32(MAX_IDLE_TIMEOUT_MS).into()));
+    let mut config = ClientConfig::with_root_certificates(certs);
+    let mut transport_cfg = TransportConfig::default();
+    transport_cfg.max_idle_timeout(Some(
+        Duration::from_millis(MAX_IDLE_TIMEOUT_MS)
+            .try_into()
+            .unwrap(),
+    ));
+    config.transport_config(Arc::new(transport_cfg));
 
     config
 }
@@ -141,10 +149,9 @@ pub fn client_and_server_config() -> (ClientConfig, ServerConfig) {
 }
 
 /// Creates a raw `quinn` endpoint capable of initiating and accepting connections.
-pub fn raw_endpoint(client_cfg: ClientConfig, server_cfg: ServerConfig) -> (Endpoint, Incoming) {
-    let (mut endpoint, incoming) =
-        Endpoint::server(server_cfg, "127.0.0.1:0".parse().unwrap()).unwrap();
+pub fn raw_endpoint(client_cfg: ClientConfig, server_cfg: ServerConfig) -> Endpoint {
+    let mut endpoint = Endpoint::server(server_cfg, "127.0.0.1:0".parse().unwrap()).unwrap();
     endpoint.set_default_client_config(client_cfg);
 
-    (endpoint, incoming)
+    endpoint
 }

@@ -5,9 +5,7 @@ mod common;
 use std::time::Duration;
 
 use deadline::deadline;
-use futures_util::StreamExt;
 use quickie::*;
-use quinn::NewConnection;
 use tokio::time::sleep;
 
 const NUM_MESSAGES: u8 = 3;
@@ -22,7 +20,7 @@ async fn streams_uni() {
     node.start("127.0.0.1:0".parse().unwrap()).await.unwrap();
 
     // a raw endpoint
-    let (raw_endpoint, mut raw_incoming) = common::raw_endpoint(client_cfg, server_cfg);
+    let raw_endpoint = common::raw_endpoint(client_cfg, server_cfg);
     let raw_endpoint_addr = raw_endpoint.local_addr().unwrap();
 
     // initiate a connection
@@ -32,11 +30,7 @@ async fn streams_uni() {
         .unwrap();
 
     // accept it on the raw endpoint side
-    let NewConnection {
-        connection,
-        mut uni_streams,
-        ..
-    } = raw_incoming.next().await.unwrap().await.unwrap();
+    let connection = raw_endpoint.accept().await.unwrap().await.unwrap();
 
     // send messages to a uni stream
     {
@@ -56,7 +50,7 @@ async fn streams_uni() {
         });
 
         // get the corresponding uni stream on the raw endpoint side
-        let mut raw_recv_stream = uni_streams.next().await.unwrap().unwrap();
+        let mut raw_recv_stream = connection.accept_uni().await.unwrap();
 
         // check if the raw endpoint got all of the messages
         let mut recv_buf = [255u8, 255];
@@ -102,7 +96,7 @@ async fn streams_bi() {
     node.start("127.0.0.1:0".parse().unwrap()).await.unwrap();
 
     // a raw endpoint
-    let (raw_endpoint, mut raw_incoming) = common::raw_endpoint(client_cfg, server_cfg);
+    let raw_endpoint = common::raw_endpoint(client_cfg, server_cfg);
     let raw_endpoint_addr = raw_endpoint.local_addr().unwrap();
 
     // initiate a connection
@@ -112,11 +106,7 @@ async fn streams_bi() {
         .unwrap();
 
     // accept it on the raw endpoint side
-    let NewConnection {
-        connection,
-        mut bi_streams,
-        ..
-    } = raw_incoming.next().await.unwrap().await.unwrap();
+    let connection = raw_endpoint.accept().await.unwrap().await.unwrap();
 
     // send and receive messages in an outbound bi stream
     {
@@ -136,7 +126,7 @@ async fn streams_bi() {
         });
 
         // get the corresponding bi stream on the raw endpoint side
-        let (mut raw_send_stream, mut raw_recv_stream) = bi_streams.next().await.unwrap().unwrap();
+        let (mut raw_send_stream, mut raw_recv_stream) = connection.accept_bi().await.unwrap();
 
         // check if the raw endpoint got all of the messages
         let mut recv_buf = [255u8, 255];
@@ -214,7 +204,7 @@ async fn datagrams() {
     node.start("127.0.0.1:0".parse().unwrap()).await.unwrap();
 
     // a raw endpoint
-    let (raw_endpoint, mut raw_incoming) = common::raw_endpoint(client_cfg, server_cfg);
+    let raw_endpoint = common::raw_endpoint(client_cfg, server_cfg);
     let raw_endpoint_addr = raw_endpoint.local_addr().unwrap();
 
     // initiate a connection
@@ -224,11 +214,7 @@ async fn datagrams() {
         .unwrap();
 
     // accept it on the raw endpoint side
-    let NewConnection {
-        connection,
-        mut datagrams,
-        ..
-    } = raw_incoming.next().await.unwrap().await.unwrap();
+    let connection = raw_endpoint.accept().await.unwrap().await.unwrap();
 
     // outbound
     {
@@ -239,7 +225,7 @@ async fn datagrams() {
 
         // check if the raw endpoint got all of the datagrams
         for i in 0..NUM_MESSAGES {
-            assert_eq!(&datagrams.next().await.unwrap().unwrap(), &[i, i][..]);
+            assert_eq!(&connection.read_datagram().await.unwrap(), &[i, i][..]);
         }
     }
 

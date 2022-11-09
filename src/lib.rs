@@ -14,10 +14,7 @@ use std::{
 
 use bytes::Bytes;
 use futures_util::StreamExt;
-use quinn::{
-    Connecting, Datagrams, Endpoint, IncomingBiStreams, IncomingUniStreams, NewConnection,
-    RecvStream, SendStream,
-};
+use quinn::{Connecting, Endpoint, RecvStream, SendStream};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::codec::{Decoder, Encoder, FramedRead, FramedWrite};
 use tracing::*;
@@ -164,16 +161,11 @@ where
     /// Binds the node to a UDP socket with the given address and returns the bound address.
     async fn start(&self, addr: SocketAddr) -> io::Result<SocketAddr> {
         // create the QUIC endpoint
-        let (mut endpoint, incoming) = if let Some(server_cfg) = self.node().config.server.clone() {
-            let (endpoint, incoming) = Endpoint::server(server_cfg, addr)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-            (endpoint, Some(incoming))
+        let mut endpoint = if let Some(server_cfg) = self.node().config.server.clone() {
+            Endpoint::server(server_cfg, addr)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
         } else {
-            let endpoint =
-                Endpoint::client(addr).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-            (endpoint, None)
+            Endpoint::client(addr).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
         };
 
         if let Some(client_cfg) = self.node().config.client.clone() {
@@ -181,31 +173,32 @@ where
         }
 
         let local_addr = endpoint.local_addr()?;
-        self.node().endpoint.set(Box::new(endpoint)).unwrap();
+        self.node()
+            .endpoint
+            .set(Box::new(endpoint.clone()))
+            .unwrap();
 
-        if let Some(mut inc) = incoming {
-            let (tx, rx) = oneshot::channel();
-            let node = self.clone();
-            let task = tokio::spawn(async move {
-                trace!("spawned the listening task");
-                tx.send(()).unwrap(); // safe; the channel was just opened
+        let (tx, rx) = oneshot::channel();
+        let node = self.clone();
+        let task = tokio::spawn(async move {
+            trace!("spawned the listening task");
+            tx.send(()).unwrap(); // safe; the channel was just opened
 
-                while let Some(conn) = inc.next().await {
-                    let addr = conn.remote_address();
-                    trace!("received a connection attempt from {}", addr);
+            while let Some(conn) = endpoint.accept().await {
+                let addr = conn.remote_address();
+                trace!("received a connection attempt from {}", addr);
 
-                    let node_clone = node.clone();
-                    tokio::spawn(async move {
-                        if let Err(e) = node_clone.process_conn(conn).await {
-                            error!("rejected a connection attempt from {}: {}", addr, e);
-                        }
-                    });
-                }
-            });
+                let node_clone = node.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = node_clone.process_conn(conn).await {
+                        error!("rejected a connection attempt from {}: {}", addr, e);
+                    }
+                });
+            }
+        });
 
-            self.node().register_task(task);
-            let _ = rx.await;
-        }
+        self.node().register_task(task);
+        let _ = rx.await;
 
         Ok(local_addr)
     }
@@ -313,30 +306,22 @@ where
         trace!("finalizing connection with {}", addr);
 
         // finalize the connection
-        let new_conn = conn
+        let connection = conn
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        let conn_id = new_conn.connection.stable_id();
+        let conn_id = connection.stable_id();
 
         debug!(
             "successfully connected to {}; stable ID: {:#x}",
             addr, conn_id
         );
 
-        let NewConnection {
-            connection,
-            uni_streams,
-            bi_streams,
-            datagrams,
-            ..
-        } = new_conn;
-
         // spawn stream and datagram handlers
         let (n1, n2, n3) = (self.clone(), self.clone(), self.clone());
         tokio::join!(
-            n1.handle_uni_streams(conn_id, uni_streams),
-            n2.handle_bi_streams(conn_id, bi_streams),
-            n3.handle_datagrams(conn_id, datagrams),
+            n1.handle_uni_streams(connection.clone()),
+            n2.handle_bi_streams(connection.clone()),
+            n3.handle_datagrams(connection.clone()),
         );
 
         let conn = Conn {
@@ -494,15 +479,17 @@ where
 
     /// Spawns a task handling inbound uni streams from the given connection.
     #[doc(hidden)]
-    async fn handle_uni_streams(&self, conn_id: ConnId, mut streams: IncomingUniStreams) {
+    async fn handle_uni_streams(&self, connection: Connection) {
+        let conn_id = connection.stable_id();
+
         let (tx, rx) = oneshot::channel();
         let node = self.clone();
         let task = tokio::spawn(async move {
             trace!("handling unidir streams from {:#x}", conn_id);
             tx.send(()).unwrap(); // safe; the channel was just opened
 
-            while let Some(item) = streams.next().await {
-                match item {
+            loop {
+                match connection.accept_uni().await {
                     Ok(recv_stream) => {
                         trace!("received a unidir stream from {:#x}", conn_id);
                         node.handle_recv_stream(conn_id, recv_stream).await;
@@ -521,15 +508,17 @@ where
 
     /// Spawns a task handling inbound bi streams from the given connection.
     #[doc(hidden)]
-    async fn handle_bi_streams(&self, conn_id: ConnId, mut streams: IncomingBiStreams) {
+    async fn handle_bi_streams(&self, connection: Connection) {
+        let conn_id = connection.stable_id();
+
         let (tx, rx) = oneshot::channel();
         let node = self.clone();
         let task = tokio::spawn(async move {
             trace!("handling bidir streams from {:#x}", conn_id);
             tx.send(()).unwrap(); // safe; the channel was just opened
 
-            while let Some(item) = streams.next().await {
-                match item {
+            loop {
+                match connection.accept_bi().await {
                     Ok((send_stream, recv_stream)) => {
                         debug!("received a bidir stream from {:#x}", conn_id);
                         node.handle_send_stream(conn_id, send_stream).await;
@@ -549,15 +538,17 @@ where
 
     /// Spawns a task handling inbound datagrams from the given connection.
     #[doc(hidden)]
-    async fn handle_datagrams(&self, conn_id: ConnId, mut datagrams: Datagrams) {
+    async fn handle_datagrams(&self, connection: Connection) {
+        let conn_id = connection.stable_id();
+
         let (tx, rx) = oneshot::channel();
         let node = self.clone();
         let task = tokio::spawn(async move {
             trace!("handling datagrams from {:#x}", conn_id);
             tx.send(()).unwrap(); // safe; the channel was just opened
 
-            while let Some(item) = datagrams.next().await {
-                match item {
+            loop {
+                match connection.read_datagram().await {
                     Ok(datagram) => {
                         if let Err(e) = node.process_datagram(conn_id, datagram).await {
                             error!("failed to process a datagram from {:#x}: {}", conn_id, e);

@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use deadline::deadline;
-use futures_util::StreamExt;
 use peak_alloc::PeakAlloc;
 use quickie::*;
 use tokio::time::sleep;
@@ -45,23 +44,22 @@ async fn cleanups_conns() {
 
     for i in 0..NUM_CONNS {
         // a raw endpoint
-        let (raw_endpoint, mut raw_incoming) =
-            common::raw_endpoint(client_cfg.clone(), server_cfg.clone());
+        let raw_endpoint = common::raw_endpoint(client_cfg.clone(), server_cfg.clone());
         let raw_endpoint_addr = raw_endpoint.local_addr().unwrap();
 
         // test both outbound and inbound conns
-        let (conn_id, raw_new_conn) = if i % 2 == 0 {
+        let (conn_id, connection) = if i % 2 == 0 {
             let conn_id = node
                 .connect(raw_endpoint_addr, common::SERVER_NAME)
                 .await
                 .unwrap();
 
             // make sure that the raw endpoint can finalize the connection too
-            let raw_new_conn = raw_incoming.next().await.unwrap().await.unwrap();
+            let connection = raw_endpoint.accept().await.unwrap().await.unwrap();
 
-            (conn_id, raw_new_conn)
+            (conn_id, connection)
         } else {
-            let raw_new_conn = raw_endpoint
+            let connection = raw_endpoint
                 .connect(node_addr, common::SERVER_NAME)
                 .unwrap()
                 .await
@@ -72,7 +70,7 @@ async fn cleanups_conns() {
                 == 1);
             let conn_id = node.get_connections().pop().unwrap().stable_id();
 
-            (conn_id, raw_new_conn)
+            (conn_id, connection)
         };
 
         // check both outbond and inbound uni streams
@@ -81,7 +79,7 @@ async fn cleanups_conns() {
             node.send_msg(conn_id, stream_id, Bytes::from_static(b"herp derp"))
                 .unwrap();
         } else {
-            let mut send_stream = raw_new_conn.connection.open_uni().await.unwrap();
+            let mut send_stream = connection.open_uni().await.unwrap();
             send_stream.write_all(b"herp derp").await.unwrap();
         }
 
@@ -90,7 +88,7 @@ async fn cleanups_conns() {
         // TODO: try to avoid this sleep
         sleep(Duration::from_millis(10)).await;
 
-        raw_new_conn.connection.close(Default::default(), &[]);
+        connection.close(Default::default(), &[]);
         raw_endpoint.close(Default::default(), &[]);
 
         // TODO: try to avoid this sleep

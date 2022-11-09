@@ -6,7 +6,6 @@ mod common;
 use std::time::Duration;
 
 use deadline::deadline;
-use futures_util::StreamExt;
 use quickie::*;
 use tokio::time::timeout;
 
@@ -27,7 +26,7 @@ async fn conns_server_only() {
     let node_addr = node.start("127.0.0.1:0".parse().unwrap()).await.unwrap();
 
     // a raw endpoint
-    let (raw_endpoint, _raw_incoming) = common::raw_endpoint(client_cfg, server_cfg);
+    let raw_endpoint = common::raw_endpoint(client_cfg, server_cfg);
     let raw_endpoint_addr = raw_endpoint.local_addr().unwrap();
 
     // a server-only node can't initiate a connection
@@ -64,7 +63,7 @@ async fn conns_client_only() {
     let node_addr = node.start("127.0.0.1:0".parse().unwrap()).await.unwrap();
 
     // a raw endpoint
-    let (raw_endpoint, mut raw_incoming) = common::raw_endpoint(client_cfg, server_cfg);
+    let raw_endpoint = common::raw_endpoint(client_cfg, server_cfg);
     let raw_endpoint_addr = raw_endpoint.local_addr().unwrap();
 
     // a client-only node can't accept a connection
@@ -85,7 +84,7 @@ async fn conns_client_only() {
         .unwrap();
 
     // make sure that the raw endpoint can finalize the connection too
-    assert!(raw_incoming.next().await.unwrap().await.is_ok());
+    assert!(raw_endpoint.accept().await.unwrap().await.is_ok());
 
     // check a node-side disconnect
     assert!(node.disconnect(conn_id, Default::default(), &[0]).await);
@@ -105,7 +104,7 @@ async fn conns_client_plus_server() {
     let node_addr = node.start("127.0.0.1:0".parse().unwrap()).await.unwrap();
 
     // a raw endpoint
-    let (raw_endpoint, mut raw_incoming) = common::raw_endpoint(client_cfg, server_cfg);
+    let raw_endpoint = common::raw_endpoint(client_cfg, server_cfg);
     let raw_endpoint_addr = raw_endpoint.local_addr().unwrap();
 
     // a client+server node can initiate a connection
@@ -115,7 +114,7 @@ async fn conns_client_plus_server() {
         .unwrap();
 
     // make sure that the raw endpoint can finalize the connection too
-    assert!(raw_incoming.next().await.unwrap().await.is_ok());
+    assert!(raw_endpoint.accept().await.unwrap().await.is_ok());
 
     // check a node-side disconnect
     assert!(node.disconnect(conn_id, Default::default(), &[0]).await);
