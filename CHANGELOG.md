@@ -2,11 +2,13 @@
 
 ### Changed
 
-- updated `quinn` to 0.10, `tokio` to `1.24`, and the dev dependencies
+- updated `quinn` and `quinn-proto` to `0.10`
+- updated `tokio` to `1.24`
+- updated the dev dependencies
 
 ### Fixed
 
-- `disconnect` now waits until the connection is fully closed using `quinn::Connection::closed`
+- `Quickie::disconnect` now waits until the connection is fully closed using `quinn::Connection::closed`
 
 # 0.4.0
 
