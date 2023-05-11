@@ -151,7 +151,10 @@ where
     /// Sends the provided message to the specified stream.
     fn send_datagram(&self, conn_id: ConnId, datagram: Bytes) -> io::Result<()> {
         if let Some(conn) = self.get_connection(conn_id) {
+            let len = datagram.len();
+
             conn.send_datagram(datagram)
+                .map(|_| self.node().register_msg_tx(conn_id, None, len))
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
         } else {
             io_err!(format!("connection {:#x} doesn't exist", conn_id))
@@ -301,6 +304,15 @@ where
             .and_then(|streams| streams.read().get(&stream_id).map(|s| s.stats.get_stats()))
     }
 
+    /// Returns simple statistics related to the datagrams for the specified connection.
+    fn get_datagram_stats(&self, conn_id: ConnId) -> Option<StreamStats> {
+        self.node()
+            .conns
+            .read()
+            .get(&conn_id)
+            .map(|conn| conn.datagram_stats.get_stats())
+    }
+
     /// Performs initial setup of an accepted or initiated connection.
     #[doc(hidden)]
     async fn process_conn(&self, conn: Connecting) -> io::Result<ConnId> {
@@ -330,6 +342,7 @@ where
             conn: connection,
             streams: Default::default(),
             tasks: Default::default(),
+            datagram_stats: Default::default(),
         };
 
         self.node().conns.write().insert(conn_id, conn);
@@ -362,7 +375,8 @@ where
             while let Some(item) = framed.next().await {
                 match item {
                     Ok((msg, msg_size)) => {
-                        node.node().register_msg_rx(conn_id, stream_id, msg_size);
+                        node.node()
+                            .register_msg_rx(conn_id, Some(stream_id), msg_size);
 
                         trace!(
                             "isolated a {}B message from {}",
@@ -426,7 +440,8 @@ where
 
                 match counting_send(&mut framed, msg).await {
                     Ok(msg_size) => {
-                        node.node().register_msg_tx(conn_id, stream_id, msg_size);
+                        node.node()
+                            .register_msg_tx(conn_id, Some(stream_id), msg_size);
 
                         trace!(
                             "sent a {}B message to {}",
@@ -552,6 +567,8 @@ where
             loop {
                 match connection.read_datagram().await {
                     Ok(datagram) => {
+                        node.node().register_msg_rx(conn_id, None, datagram.len());
+
                         if let Err(e) = node.process_datagram(conn_id, datagram).await {
                             error!("failed to process a datagram from {:#x}: {}", conn_id, e);
                         }

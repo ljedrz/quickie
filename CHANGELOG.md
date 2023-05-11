@@ -1,3 +1,9 @@
+# 0.6.0
+
+### Added
+
+- per-connection datagram stats are now collected
+
 # 0.5.0
 
 ### Changed

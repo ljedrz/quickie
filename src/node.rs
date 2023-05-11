@@ -65,21 +65,51 @@ impl Node {
         self.conns.read().get(&conn_id).map(|c| c.streams.clone())
     }
 
-    /// Registers an inbound message from the given stream.
-    pub(crate) fn register_msg_rx(&self, conn_id: ConnId, stream_id: StreamId, size: usize) {
-        if let Some(stats) = self
-            .get_streams(conn_id)
-            .and_then(|streams| streams.read().get(&stream_id).map(|s| s.stats.clone()))
+    /// Registers an inbound message from the given stream or a datagram from the connection.
+    /// A missing `StreamId` indicates a datagram.
+    pub(crate) fn register_msg_rx(
+        &self,
+        conn_id: ConnId,
+        stream_id: Option<StreamId>,
+        size: usize,
+    ) {
+        if let Some(stream_id) = stream_id {
+            if let Some(stats) = self
+                .get_streams(conn_id)
+                .and_then(|streams| streams.read().get(&stream_id).map(|s| s.stats.clone()))
+            {
+                stats.register_msg_rx(size);
+            }
+        } else if let Some(stats) = self
+            .conns
+            .read()
+            .get(&conn_id)
+            .map(|c| c.datagram_stats.clone())
         {
             stats.register_msg_rx(size);
         }
     }
 
-    /// Registers an outbound message to the given stream.
-    pub(crate) fn register_msg_tx(&self, conn_id: ConnId, stream_id: StreamId, size: usize) {
-        if let Some(stats) = self
-            .get_streams(conn_id)
-            .and_then(|streams| streams.read().get(&stream_id).map(|s| s.stats.clone()))
+    /// Registers an outbound message to the given stream or a datagram to the connection.
+    /// A missing `StreamId` indicates a datagram.
+    pub(crate) fn register_msg_tx(
+        &self,
+        conn_id: ConnId,
+        stream_id: Option<StreamId>,
+        size: usize,
+    ) {
+        if let Some(stream_id) = stream_id {
+            if let Some(stats) = self
+                .get_streams(conn_id)
+                .and_then(|streams| streams.read().get(&stream_id).map(|s| s.stats.clone()))
+            {
+                stats.register_msg_tx(size);
+            }
+        } else if let Some(stats) = self
+            .conns
+            .read()
+            .get(&conn_id)
+            .map(|c| c.datagram_stats.clone())
         {
             stats.register_msg_tx(size);
         }

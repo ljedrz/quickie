@@ -218,10 +218,17 @@ async fn datagrams() {
 
     // outbound
     {
-        // send a few datagrams
+        // send a few datagrams from the node
         for i in 0..NUM_MESSAGES {
             node.send_datagram(conn_id, [i, i].to_vec().into()).unwrap();
         }
+
+        // check if the node's stats were updated
+        let node_clone = node.clone();
+        deadline!(Duration::from_secs(1), move || {
+            let stats = node_clone.get_datagram_stats(conn_id).unwrap();
+            stats.msgs_sent == NUM_MESSAGES as u64 && stats.bytes_sent == NUM_MESSAGES as u64 * 2
+        });
 
         // check if the raw endpoint got all of the datagrams
         for i in 0..NUM_MESSAGES {
@@ -231,12 +238,16 @@ async fn datagrams() {
 
     // inbound
     {
-        // send a few datagrams
+        // send a few datagrams to the node
         for i in 0..NUM_MESSAGES {
             connection.send_datagram([i, i].to_vec().into()).unwrap();
         }
 
-        // TODO: determine what to do about datagram stats
-        sleep(Duration::from_millis(50)).await
+        // check if the node got them
+        let node_clone = node.clone();
+        deadline!(Duration::from_secs(1), move || {
+            let stats = node_clone.get_datagram_stats(conn_id).unwrap();
+            stats.msgs_recv == NUM_MESSAGES as u64 && stats.bytes_recv == NUM_MESSAGES as u64 * 2
+        });
     }
 }

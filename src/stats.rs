@@ -95,6 +95,7 @@ impl StreamStatsInner {
     }
 }
 
+// TODO: rename to something else, now that datagram stats are collected too.
 /// A set of simple statistics related to a stream.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StreamStats {

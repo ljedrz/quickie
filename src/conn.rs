@@ -40,6 +40,7 @@ pub(crate) struct Conn {
     pub(crate) conn: Connection,
     pub(crate) streams: Arc<Streams>,
     pub(crate) tasks: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    pub(crate) datagram_stats: Arc<StreamStatsInner>,
 }
 
 impl Conn {
