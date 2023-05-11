@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use bytes::Bytes;
 use deadline::deadline;
+use humansize::{format_size, ToF64, Unsigned, DECIMAL};
 use peak_alloc::PeakAlloc;
 use quickie::*;
 use tokio::time::sleep;
@@ -11,12 +12,16 @@ use tokio::time::sleep;
 #[global_allocator]
 static PEAK_ALLOC: PeakAlloc = PeakAlloc;
 
+fn fmt_size(size: impl ToF64 + Unsigned) -> String {
+    format_size(size, DECIMAL)
+}
+
 #[tokio::test]
 async fn cleanups_conns() {
     const NUM_CONNS: usize = 100;
 
     // register heap use before node setup
-    let initial_heap_use = PEAK_ALLOC.current_usage();
+    let initial_heap = PEAK_ALLOC.current_usage();
 
     // prepare the configs
     let (client_cfg, server_cfg) = common::client_and_server_config();
@@ -28,7 +33,7 @@ async fn cleanups_conns() {
     )));
 
     // measure the size of a node with no connections
-    let idle_node_size = (PEAK_ALLOC.current_usage() - initial_heap_use) / 1000;
+    let idle_node_size = PEAK_ALLOC.current_usage() - initial_heap;
 
     let node_addr = node.start("127.0.0.1:0".parse().unwrap()).await.unwrap();
 
@@ -36,7 +41,7 @@ async fn cleanups_conns() {
     let heap_after_node_setup = PEAK_ALLOC.current_usage();
 
     // start keeping track of the average heap use
-    let mut avg_heap_use = 0;
+    let mut avg_heap = 0;
 
     // due to tokio channel internals, a small heap bump occurs after 32 calls to `mpsc::Sender::send`
     // if it wasn't for that, heap use after the 1st connection (i == 0) would be registered instead
@@ -86,49 +91,48 @@ async fn cleanups_conns() {
         assert!(node.disconnect(conn_id, Default::default(), &[]).await);
 
         // TODO: try to avoid this sleep
-        sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(50)).await;
 
         connection.close(Default::default(), &[]);
         raw_endpoint.close(Default::default(), &[]);
 
         // TODO: try to avoid this sleep
-        sleep(Duration::from_millis(20)).await;
+        sleep(Duration::from_millis(50)).await;
 
         // obtain and record current memory use
-        let current_heap_use = PEAK_ALLOC.current_usage();
+        let current_heap = PEAK_ALLOC.current_usage();
 
         // register heap use once the 33rd connection is established and dropped
         if i == 32 {
-            heap_after_32_conns = current_heap_use;
+            heap_after_32_conns = current_heap;
         }
 
         // save current heap size to calculate average use later on
-        avg_heap_use += current_heap_use;
+        avg_heap += current_heap;
     }
 
     // calculate avg heap use
-    avg_heap_use /= NUM_CONNS;
+    avg_heap /= NUM_CONNS;
 
     // check final heap use and calculate heap growth
-    let final_heap_use = PEAK_ALLOC.current_usage();
-    let heap_growth = final_heap_use - heap_after_32_conns;
+    let final_heap = PEAK_ALLOC.current_usage();
+    let heap_growth = final_heap.saturating_sub(heap_after_32_conns);
 
     // calculate some helper values
-    let max_heap_use = PEAK_ALLOC.peak_usage() / 1000;
-    let final_heap_use_kb = final_heap_use / 1000;
-    let single_node_size = (heap_after_node_setup - initial_heap_use) / 1000;
+    let max_heap = PEAK_ALLOC.peak_usage();
+    let single_node_size = heap_after_node_setup - initial_heap;
 
     println!("---- heap use summary ----\n");
-    println!("before node setup:     {}kB", initial_heap_use / 1000);
-    println!("after node setup:      {}kB", heap_after_node_setup / 1000);
-    println!("after 32 connections:  {}kB", heap_after_32_conns / 1000);
-    println!("after {} connections: {}kB", NUM_CONNS, final_heap_use_kb);
-    println!("average memory use:    {}kB", avg_heap_use / 1000);
-    println!("maximum memory use:    {}kB", max_heap_use); // note: heavily affected by Config::initial_read_buffer_size
+    println!("before node setup:     {}", fmt_size(initial_heap));
+    println!("after node setup:      {}", fmt_size(heap_after_node_setup));
+    println!("after 32 connections:  {}", fmt_size(heap_after_32_conns));
+    println!("after {} connections: {}", NUM_CONNS, fmt_size(final_heap));
+    println!("average memory use:    {}", fmt_size(avg_heap));
+    println!("maximum memory use:    {}", fmt_size(max_heap)); // note: heavily affected by Config::initial_read_buffer_size
     println!();
-    println!("idle node size:    {}kB", idle_node_size);
-    println!("started node size: {}kB", single_node_size);
-    println!("leaked memory:     {}B", heap_growth);
+    println!("idle node size:    {}", fmt_size(idle_node_size));
+    println!("started node size: {}", fmt_size(single_node_size));
+    println!("leaked memory:     {}", fmt_size(heap_growth));
     println!();
 
     // regardless of the number of connections the node handles, its memory use shouldn't grow at all

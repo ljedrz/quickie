@@ -35,6 +35,7 @@ tracing = { version = "0.1", default-features = false }
 
 [dev-dependencies]
 deadline = "0.2"
+humansize = "2"
 peak_alloc = "0.2"
 rcgen = "0.10"
 ring = "0.16"
