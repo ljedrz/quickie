@@ -253,6 +253,8 @@ where
                 let _ = task.await;
             }
 
+            conn.conn.closed().await;
+
             true
         } else {
             debug!("wasn't connected to {:#x}", conn_id);
