@@ -1,3 +1,9 @@
+# 0.5.0
+
+### Changed
+
+- updated `quinn` to 0.10, `tokio` to `1.24`, and the dev dependencies
+
 # 0.4.0
 
 ### Added
