@@ -7,7 +7,6 @@ use deadline::deadline;
 use humansize::{format_size, ToF64, Unsigned, DECIMAL};
 use peak_alloc::PeakAlloc;
 use quickie::*;
-use tokio::time::sleep;
 
 #[global_allocator]
 static PEAK_ALLOC: PeakAlloc = PeakAlloc;
@@ -90,14 +89,10 @@ async fn cleanups_conns() {
 
         assert!(node.disconnect(conn_id, Default::default(), &[]).await);
 
-        // TODO: try to avoid this sleep
-        sleep(Duration::from_millis(50)).await;
-
         connection.close(Default::default(), &[]);
+        connection.closed().await;
         raw_endpoint.close(Default::default(), &[]);
-
-        // TODO: try to avoid this sleep
-        sleep(Duration::from_millis(50)).await;
+        raw_endpoint.wait_idle().await;
 
         // obtain and record current memory use
         let current_heap = PEAK_ALLOC.current_usage();
