@@ -18,6 +18,7 @@
 1. define a clonable struct containing a [Node](https://docs.rs/quickie/latest/quickie/struct.Node.html) and any extra state you'd like to carry
 2. implement the [`Quickie`](https://docs.rs/quickie/latest/quickie/trait.Quickie.html) trait for it
 3. create that struct (or as many of them as you like)
+
 That's it!
 
 ## examples
