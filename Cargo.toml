@@ -10,7 +10,7 @@ documentation = "https://docs.rs/quickie"
 readme = "README.md"
 categories = ["network-programming", "asynchronous"]
 keywords = ["p2p", "peer-to-peer", "networking"]
-rust-version = "1.56"
+rust-version = "1.63"
 
 [badges]
 maintenance = { status = "actively-developed" }
