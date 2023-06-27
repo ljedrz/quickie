@@ -10,7 +10,7 @@ documentation = "https://docs.rs/quickie"
 readme = "README.md"
 categories = ["network-programming", "asynchronous"]
 keywords = ["p2p", "peer-to-peer", "networking"]
-rust-version = "1.63"
+rust-version = "1.70"
 
 [badges]
 maintenance = { status = "actively-developed" }
@@ -25,7 +25,6 @@ test = []
 async-trait = "0.1"
 bytes = "1"
 futures-util = { version = "0.3", features = ["sink"] }
-once_cell = { version = "1", features = ["parking_lot"] }
 parking_lot = "0.12"
 quinn = "0.10"
 quinn-proto = { version = "0.10", default-features = false }

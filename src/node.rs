@@ -1,6 +1,10 @@
-use std::{collections::HashMap, io, ops::Deref, sync::Arc};
+use std::{
+    collections::HashMap,
+    io,
+    ops::Deref,
+    sync::{Arc, OnceLock},
+};
 
-use once_cell::race::OnceBox;
 use parking_lot::{Mutex, RwLock};
 use quinn::{ClientConfig, Endpoint, ServerConfig, StreamId};
 use tokio::task::JoinHandle;
@@ -22,7 +26,7 @@ impl Deref for Node {
 #[doc(hidden)]
 pub struct InnerNode {
     pub(crate) config: Config,
-    pub(crate) endpoint: OnceBox<Endpoint>,
+    pub(crate) endpoint: OnceLock<Endpoint>,
     pub(crate) conns: RwLock<HashMap<ConnId, Conn>>,
     pub(crate) tasks: Mutex<Vec<JoinHandle<()>>>,
 }

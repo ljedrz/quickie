@@ -4,6 +4,11 @@
 
 - per-connection datagram stats are now collected
 
+### Changed
+
+- `once_cell` is no longer a dependency
+- due to the use of `std::sync::OnceLock`, the MSRV is increased to 1.70
+
 # 0.5.0
 
 ### Changed

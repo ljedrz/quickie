@@ -176,10 +176,7 @@ where
         }
 
         let local_addr = endpoint.local_addr()?;
-        self.node()
-            .endpoint
-            .set(Box::new(endpoint.clone()))
-            .unwrap();
+        self.node().endpoint.set(endpoint.clone()).unwrap();
 
         let (tx, rx) = oneshot::channel();
         let node = self.clone();
