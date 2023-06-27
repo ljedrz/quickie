@@ -37,7 +37,7 @@ tracing = { version = "0.1", default-features = false }
 deadline = "0.2"
 humansize = "2"
 peak_alloc = "0.2"
-rcgen = "0.10"
+rcgen = "0.11"
 ring = "0.16"
 rustls = { version = "0.21", default-features = false, features = ["dangerous_configuration", "quic"] }
 tokio = { version = "1.24", features = ["rt-multi-thread"] }
