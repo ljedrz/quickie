@@ -22,7 +22,7 @@
 That's it!
 
 ## examples
-- TODO
+- simple interop with libp2p-quic
 
 ## status
 - the core functionalities seem to work, but there can still be bugs

@@ -1,0 +1,80 @@
+//! An minimal setup capable of connecting to a libp2p-quic node.
+
+mod common;
+
+use std::sync::Arc;
+
+use futures_util::StreamExt;
+use libp2p::core::{multiaddr, transport::Transport as _};
+use libp2p::swarm::{keep_alive, NetworkBehaviour, SwarmBuilder, SwarmEvent};
+use quickie::*;
+use quinn::ClientConfig;
+use tokio::sync::oneshot;
+use tracing::*;
+use tracing_subscriber::filter::LevelFilter;
+
+#[derive(NetworkBehaviour, Default)]
+struct MyBehaviour {
+    keep_alive: keep_alive::Behaviour,
+}
+
+#[tokio::main(flavor = "multi_thread")]
+async fn main() {
+    // start the logger
+    common::start_logger(LevelFilter::TRACE);
+
+    // prepare the libp2p config
+    let keypair = libp2p::identity::Keypair::generate_ed25519();
+    let quic_config = libp2p_quic::Config::new(&keypair);
+    let addr = "/ip4/127.0.0.1/udp/0/quic-v1".parse().unwrap();
+
+    // create a libp2p-quic transport and start listening
+    let transport = libp2p_quic::tokio::Transport::new(quic_config)
+        .map(|(p, c), _| (p, libp2p::core::muxing::StreamMuxerBox::new(c)))
+        .boxed();
+
+    let mut swarm = SwarmBuilder::with_tokio_executor(
+        transport,
+        MyBehaviour::default(),
+        keypair.public().to_peer_id(),
+    )
+    .build();
+
+    swarm.listen_on(addr).unwrap();
+
+    // listen for events in the libp2p node
+    let (tx, rx) = oneshot::channel();
+    tokio::spawn(async move {
+        let mut tx = Some(tx);
+        loop {
+            let event = swarm.select_next_some().await;
+            debug!("libp2p node: {:?}", event);
+            if let SwarmEvent::NewListenAddr { address, .. } = event {
+                tx.take().unwrap().send(address).unwrap();
+            }
+        }
+    });
+
+    // obtain the listening port of the libp2p node
+    let mut addr = rx.await.unwrap();
+    addr.pop(); // drop the final Quic bit
+    let port = if let Some(multiaddr::Protocol::Udp(port)) = addr.pop() {
+        port
+    } else {
+        panic!("the libp2p swarm did not return a listening UDP port");
+    };
+
+    // prepare a quickie client config adhering to the libp2p setup
+    let crypto = libp2p::tls::make_client_config(&keypair, None).unwrap();
+    let client_cfg = ClientConfig::new(Arc::new(crypto));
+
+    // create a quickie node in client-only mode and start it
+    let node = common::TestNode(Node::new(Config::new(Some(client_cfg), None)));
+    node.start("127.0.0.1:0".parse().unwrap()).await.unwrap();
+
+    // initiate a connection
+    let _conn_id = node
+        .connect(format!("127.0.0.1:{port}").parse().unwrap(), "l") // this is the domain currently used by libp2p-quic
+        .await
+        .unwrap();
+}
