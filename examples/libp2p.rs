@@ -5,18 +5,16 @@ mod common;
 use std::sync::Arc;
 
 use futures_util::StreamExt;
-use libp2p::core::{multiaddr, transport::Transport as _};
-use libp2p::swarm::{keep_alive, NetworkBehaviour, SwarmBuilder, SwarmEvent};
+use libp2p::core::multiaddr;
+use libp2p::{
+    swarm::{dummy::Behaviour, SwarmEvent},
+    SwarmBuilder,
+};
 use quickie::*;
 use quinn::ClientConfig;
 use tokio::sync::oneshot;
 use tracing::*;
 use tracing_subscriber::filter::LevelFilter;
-
-#[derive(NetworkBehaviour, Default)]
-struct MyBehaviour {
-    keep_alive: keep_alive::Behaviour,
-}
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
@@ -25,22 +23,17 @@ async fn main() {
 
     // prepare the libp2p config
     let keypair = libp2p::identity::Keypair::generate_ed25519();
-    let quic_config = libp2p_quic::Config::new(&keypair);
-    let addr = "/ip4/127.0.0.1/udp/0/quic-v1".parse().unwrap();
 
-    // create a libp2p-quic transport and start listening
-    let transport = libp2p_quic::tokio::Transport::new(quic_config)
-        .map(|(p, c), _| (p, libp2p::core::muxing::StreamMuxerBox::new(c)))
-        .boxed();
+    let mut swarm = SwarmBuilder::with_new_identity()
+        .with_tokio()
+        .with_quic()
+        .with_behaviour(|_key| Behaviour)
+        .unwrap()
+        .build();
 
-    let mut swarm = SwarmBuilder::with_tokio_executor(
-        transport,
-        MyBehaviour::default(),
-        keypair.public().to_peer_id(),
-    )
-    .build();
-
-    swarm.listen_on(addr).unwrap();
+    swarm
+        .listen_on("/ip4/127.0.0.1/udp/0/quic-v1".parse().unwrap())
+        .unwrap();
 
     // listen for events in the libp2p node
     let (tx, rx) = oneshot::channel();
