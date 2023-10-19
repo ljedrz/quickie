@@ -27,7 +27,7 @@ bytes = "1"
 futures-util = { version = "0.3", features = ["sink"] }
 parking_lot = "0.12"
 quinn = "0.10"
-quinn-proto = { version = "0.10", default-features = false }
+quinn-proto = { version = "0.10.5", default-features = false }
 tokio = { version = "1.24", features = ["io-util", "macros", "net", "parking_lot", "rt", "sync", "time"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 tracing = { version = "0.1", default-features = false }
