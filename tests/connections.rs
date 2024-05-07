@@ -3,7 +3,13 @@
 
 mod common;
 
-use std::time::Duration;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use deadline::deadline;
 use quickie::*;
@@ -77,14 +83,26 @@ async fn conns_client_only() {
     .await
     .is_err());
 
+    // a flag to indicate that the client connection was accepted
+    let conn_success_flag: Arc<AtomicBool> = Default::default();
+
+    // prepare to accept a connection at the raw endpoint
+    let flag = conn_success_flag.clone();
+    tokio::spawn(async move {
+        if let Some(conn) = raw_endpoint.accept().await {
+            conn.await.unwrap();
+            flag.store(true, Ordering::Relaxed);
+        }
+    });
+
     // a client-only node can initiate a connection
     let conn_id = node
         .connect(raw_endpoint_addr, common::SERVER_NAME)
         .await
         .unwrap();
 
-    // make sure that the raw endpoint can finalize the connection too
-    assert!(raw_endpoint.accept().await.unwrap().await.is_ok());
+    // make sure that the connection was accepted by the endpoint
+    assert!(conn_success_flag.load(Ordering::Relaxed));
 
     // check a node-side disconnect
     assert!(node.disconnect(conn_id, Default::default(), &[0]).await);
@@ -107,25 +125,37 @@ async fn conns_client_plus_server() {
     let raw_endpoint = common::raw_endpoint(client_cfg, server_cfg);
     let raw_endpoint_addr = raw_endpoint.local_addr().unwrap();
 
-    // a client+server node can initiate a connection
-    let conn_id = node
-        .connect(raw_endpoint_addr, common::SERVER_NAME)
-        .await
-        .unwrap();
-
-    // make sure that the raw endpoint can finalize the connection too
-    assert!(raw_endpoint.accept().await.unwrap().await.is_ok());
-
-    // check a node-side disconnect
-    assert!(node.disconnect(conn_id, Default::default(), &[0]).await);
-    assert!(node.get_connection(conn_id).is_none());
-
     // a client+server node can accept a connection
     assert!(raw_endpoint
         .connect(node_addr, common::SERVER_NAME)
         .unwrap()
         .await
         .is_ok());
+
+    // a flag to indicate that the client connection was accepted
+    let conn_success_flag: Arc<AtomicBool> = Default::default();
+
+    // prepare to accept a connection at the raw endpoint
+    let flag = conn_success_flag.clone();
+    tokio::spawn(async move {
+        if let Some(conn) = raw_endpoint.accept().await {
+            conn.await.unwrap();
+            flag.store(true, Ordering::Relaxed);
+        }
+    });
+
+    // a client+server node can initiate a connection
+    let conn_id = node
+        .connect(raw_endpoint_addr, common::SERVER_NAME)
+        .await
+        .unwrap();
+
+    // make sure that the connection was accepted by the endpoint
+    assert!(conn_success_flag.load(Ordering::Relaxed));
+
+    // check a node-side disconnect
+    assert!(node.disconnect(conn_id, Default::default(), &[0]).await);
+    assert!(node.get_connection(conn_id).is_none());
 
     // find the inbound connection
     let node_clone = node.clone();

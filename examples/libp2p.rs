@@ -12,6 +12,7 @@ use libp2p::{
 };
 use quickie::*;
 use quinn::ClientConfig;
+use quinn_proto::crypto::rustls::QuicClientConfig;
 use tokio::sync::oneshot;
 use tracing::*;
 use tracing_subscriber::filter::LevelFilter;
@@ -59,7 +60,7 @@ async fn main() {
 
     // prepare a quickie client config adhering to the libp2p setup
     let crypto = libp2p::tls::make_client_config(&keypair, None).unwrap();
-    let client_cfg = ClientConfig::new(Arc::new(crypto));
+    let client_cfg = ClientConfig::new(Arc::new(QuicClientConfig::try_from(crypto).unwrap()));
 
     // create a quickie node in client-only mode and start it
     let node = common::TestNode(Node::new(Config::new(Some(client_cfg), None)));

@@ -23,14 +23,23 @@ async fn streams_uni() {
     let raw_endpoint = common::raw_endpoint(client_cfg, server_cfg);
     let raw_endpoint_addr = raw_endpoint.local_addr().unwrap();
 
+    // prepare to accept a connection
+    let conn_handle = tokio::spawn(async move {
+        if let Some(conn) = raw_endpoint.accept().await {
+            conn.accept().unwrap().await.unwrap()
+        } else {
+            panic!("failed to accept a connection");
+        }
+    });
+
     // initiate a connection
     let conn_id = node
         .connect(raw_endpoint_addr, common::SERVER_NAME)
         .await
         .unwrap();
 
-    // accept it on the raw endpoint side
-    let connection = raw_endpoint.accept().await.unwrap().await.unwrap();
+    // obtain the ready connection
+    let connection = conn_handle.await.unwrap();
 
     // send messages to a uni stream
     {
@@ -99,14 +108,23 @@ async fn streams_bi() {
     let raw_endpoint = common::raw_endpoint(client_cfg, server_cfg);
     let raw_endpoint_addr = raw_endpoint.local_addr().unwrap();
 
+    // prepare to accept a connection
+    let conn_handle = tokio::spawn(async move {
+        if let Some(conn) = raw_endpoint.accept().await {
+            conn.accept().unwrap().await.unwrap()
+        } else {
+            panic!("failed to accept a connection");
+        }
+    });
+
     // initiate a connection
     let conn_id = node
         .connect(raw_endpoint_addr, common::SERVER_NAME)
         .await
         .unwrap();
 
-    // accept it on the raw endpoint side
-    let connection = raw_endpoint.accept().await.unwrap().await.unwrap();
+    // obtain the ready connection
+    let connection = conn_handle.await.unwrap();
 
     // send and receive messages in an outbound bi stream
     {
@@ -207,14 +225,23 @@ async fn datagrams() {
     let raw_endpoint = common::raw_endpoint(client_cfg, server_cfg);
     let raw_endpoint_addr = raw_endpoint.local_addr().unwrap();
 
+    // prepare to accept a connection
+    let conn_handle = tokio::spawn(async move {
+        if let Some(conn) = raw_endpoint.accept().await {
+            conn.accept().unwrap().await.unwrap()
+        } else {
+            panic!("failed to accept a connection");
+        }
+    });
+
     // initiate a connection
     let conn_id = node
         .connect(raw_endpoint_addr, common::SERVER_NAME)
         .await
         .unwrap();
 
-    // accept it on the raw endpoint side
-    let connection = raw_endpoint.accept().await.unwrap().await.unwrap();
+    // obtain the ready connection
+    let connection = conn_handle.await.unwrap();
 
     // outbound
     {

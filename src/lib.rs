@@ -188,6 +188,13 @@ where
                 let addr = conn.remote_address();
                 trace!("received a connection attempt from {}", addr);
 
+                let conn = match conn.accept() {
+                    Ok(c) => c,
+                    Err(e) => {
+                        error!("failed to accept a connection from {}: {}", addr, e);
+                        return;
+                    }
+                };
                 let node_clone = node.clone();
                 tokio::spawn(async move {
                     if let Err(e) = node_clone.process_conn(conn).await {

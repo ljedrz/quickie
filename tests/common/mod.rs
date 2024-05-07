@@ -5,6 +5,8 @@ use std::{io, sync::Arc, time::Duration};
 use bytes::{Bytes, BytesMut};
 use quickie::{ConnId, Node, Quickie};
 use quinn::{ClientConfig, Endpoint, ServerConfig, StreamId, TransportConfig};
+use quinn_proto::crypto::rustls::QuicClientConfig;
+use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
 use tokio_util::codec::BytesCodec;
 use tracing::*;
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
@@ -71,54 +73,93 @@ pub fn start_logger() {
         .init();
 }
 
-struct SkipServerVerification;
+mod danger {
+    use std::sync::Arc;
 
-impl SkipServerVerification {
-    fn new() -> Arc<Self> {
-        Arc::new(Self)
+    use rustls::client::danger::HandshakeSignatureValid;
+    use rustls::crypto::{verify_tls12_signature, verify_tls13_signature};
+    use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+    use rustls::DigitallySignedStruct;
+
+    #[derive(Debug)]
+    pub(super) struct SkipServerVerification(Arc<rustls::crypto::CryptoProvider>);
+
+    impl SkipServerVerification {
+        pub(super) fn new(provider: Arc<rustls::crypto::CryptoProvider>) -> Arc<Self> {
+            Arc::new(Self(provider))
+        }
     }
-}
 
-impl rustls::client::ServerCertVerifier for SkipServerVerification {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &rustls::Certificate,
-        _intermediates: &[rustls::Certificate],
-        _server_name: &rustls::ServerName,
-        _scts: &mut dyn Iterator<Item = &[u8]>,
-        _ocsp_response: &[u8],
-        _now: std::time::SystemTime,
-    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
-        Ok(rustls::client::ServerCertVerified::assertion())
+    impl rustls::client::danger::ServerCertVerifier for SkipServerVerification {
+        fn verify_server_cert(
+            &self,
+            _end_entity: &CertificateDer<'_>,
+            _intermediates: &[CertificateDer<'_>],
+            _server_name: &ServerName<'_>,
+            _ocsp: &[u8],
+            _now: UnixTime,
+        ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+            Ok(rustls::client::danger::ServerCertVerified::assertion())
+        }
+
+        fn verify_tls12_signature(
+            &self,
+            message: &[u8],
+            cert: &CertificateDer<'_>,
+            dss: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, rustls::Error> {
+            verify_tls12_signature(
+                message,
+                cert,
+                dss,
+                &self.0.signature_verification_algorithms,
+            )
+        }
+
+        fn verify_tls13_signature(
+            &self,
+            message: &[u8],
+            cert: &CertificateDer<'_>,
+            dss: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, rustls::Error> {
+            verify_tls13_signature(
+                message,
+                cert,
+                dss,
+                &self.0.signature_verification_algorithms,
+            )
+        }
+
+        fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+            self.0.signature_verification_algorithms.supported_schemes()
+        }
     }
 }
 
 /// Creates a server config and its corresponding certificate in DER form.
-pub fn server_config_and_cert() -> (ServerConfig, Vec<u8>) {
+pub fn server_config_and_cert() -> (ServerConfig, CertificateDer<'static>) {
     let cert = rcgen::generate_simple_self_signed(vec![SERVER_NAME.into()]).unwrap();
-    let cert_der = cert.serialize_der().unwrap();
-    let priv_key = cert.serialize_private_key_der();
-    let priv_key = rustls::PrivateKey(priv_key);
-    let cert_chain = vec![rustls::Certificate(cert_der.clone())];
+    let cert_der = CertificateDer::from(cert.cert);
+    let priv_key = PrivatePkcs8KeyDer::from(cert.key_pair.serialize_der());
 
-    let mut config = ServerConfig::with_single_cert(cert_chain, priv_key).unwrap();
-    let mut transport_cfg = TransportConfig::default();
-    transport_cfg.max_idle_timeout(Some(
+    let mut server_config =
+        ServerConfig::with_single_cert(vec![cert_der.clone()], priv_key.into()).unwrap();
+    let transport_config = Arc::get_mut(&mut server_config.transport).unwrap();
+    transport_config.max_idle_timeout(Some(
         Duration::from_millis(MAX_IDLE_TIMEOUT_MS)
             .try_into()
             .unwrap(),
     ));
-    config.transport_config(Arc::new(transport_cfg));
 
-    (config, cert_der)
+    (server_config, cert_der)
 }
 
 /// Creates a client config compatible with the given certificate.
 pub fn client_config(server_cert: Vec<u8>) -> ClientConfig {
     let mut certs = rustls::RootCertStore::empty();
-    certs.add(&rustls::Certificate(server_cert)).unwrap();
+    certs.add(CertificateDer::from(server_cert)).unwrap();
 
-    let mut config = ClientConfig::with_root_certificates(certs);
+    let mut config = ClientConfig::with_root_certificates(Arc::new(certs)).unwrap();
     let mut transport_cfg = TransportConfig::default();
     transport_cfg.max_idle_timeout(Some(
         Duration::from_millis(MAX_IDLE_TIMEOUT_MS)
@@ -132,18 +173,22 @@ pub fn client_config(server_cert: Vec<u8>) -> ClientConfig {
 
 /// Creates a client config ignoring the server certificate
 pub fn insecure_client_config() -> ClientConfig {
+    let provider = rustls::crypto::ring::default_provider();
+    provider.install_default();
+    let provider = rustls::crypto::CryptoProvider::get_default().unwrap();
     let crypto = rustls::ClientConfig::builder()
-        .with_safe_defaults()
-        .with_custom_certificate_verifier(SkipServerVerification::new())
+        .dangerous()
+        .with_custom_certificate_verifier(danger::SkipServerVerification::new(provider.clone()))
         .with_no_client_auth();
 
-    ClientConfig::new(Arc::new(crypto))
+    ClientConfig::new(Arc::new(QuicClientConfig::try_from(crypto).unwrap()))
 }
 
 /// Creates a compatible pair of client and server configs.
 pub fn client_and_server_config() -> (ClientConfig, ServerConfig) {
     let (server_cfg, _server_cert) = server_config_and_cert();
     let client_cfg = insecure_client_config();
+    // let client_cfg = client_config((*server_cert).to_owned());
 
     (client_cfg, server_cfg)
 }

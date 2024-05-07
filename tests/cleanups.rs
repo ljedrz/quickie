@@ -52,16 +52,25 @@ async fn cleanups_conns() {
         let raw_endpoint_addr = raw_endpoint.local_addr().unwrap();
 
         // test both outbound and inbound conns
-        let (conn_id, connection) = if i % 2 == 0 {
+        let (conn_id, connection, raw_endpoint) = if i % 2 == 0 {
+            // prepare to accept a connection at the raw endpoint
+            let connection_and_endpoint = tokio::spawn(async move {
+                if let Some(conn) = raw_endpoint.accept().await {
+                    (conn.await.unwrap(), raw_endpoint)
+                } else {
+                    panic!("failed to accept a connection");
+                }
+            });
+
             let conn_id = node
                 .connect(raw_endpoint_addr, common::SERVER_NAME)
                 .await
                 .unwrap();
 
             // make sure that the raw endpoint can finalize the connection too
-            let connection = raw_endpoint.accept().await.unwrap().await.unwrap();
+            let (connection, endpoint) = connection_and_endpoint.await.unwrap();
 
-            (conn_id, connection)
+            (conn_id, connection, endpoint)
         } else {
             let connection = raw_endpoint
                 .connect(node_addr, common::SERVER_NAME)
@@ -74,7 +83,7 @@ async fn cleanups_conns() {
                 == 1);
             let conn_id = node.get_connections().pop().unwrap().stable_id();
 
-            (conn_id, connection)
+            (conn_id, connection, raw_endpoint)
         };
 
         // check both outbond and inbound uni streams
