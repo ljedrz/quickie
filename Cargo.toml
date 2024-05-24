@@ -35,7 +35,9 @@ tracing = { version = "0.1", default-features = false }
 [dev-dependencies]
 deadline = "0.2"
 humansize = "2"
-libp2p = { version = "0.53", default-features = false, features = ["macros", "quic", "tls", "tokio"] }
+libp2p = { version = "0.53", default-features = false, features = ["macros", "quic", "tokio"] }
+libp2p-tls = "0.4"
+libp2p-quic = "0.10"
 peak_alloc = "0.2"
 rcgen = { version = "0.13", default-features = false, features = ["pem", "ring"]}
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }

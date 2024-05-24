@@ -59,7 +59,7 @@ async fn main() {
     };
 
     // prepare a quickie client config adhering to the libp2p setup
-    let crypto = libp2p::tls::make_client_config(&keypair, None).unwrap();
+    let crypto = libp2p_tls::make_client_config(&keypair, None).unwrap();
     let client_cfg = ClientConfig::new(Arc::new(QuicClientConfig::try_from(crypto).unwrap()));
 
     // create a quickie node in client-only mode and start it
