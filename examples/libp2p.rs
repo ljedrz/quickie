@@ -1,4 +1,4 @@
-//! An minimal setup capable of connecting to a libp2p-quic node.
+//! A minimal setup capable of connecting to a libp2p-quic node.
 
 mod common;
 
