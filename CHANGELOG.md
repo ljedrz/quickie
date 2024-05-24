@@ -1,3 +1,14 @@
+# 0.7.0
+
+### Added
+
+- a simple example of a `libp2p` connection
+
+### Changed
+
+- updated `quinn` and `quinn-proto` to `0.11`
+- updated the dev dependencies
+
 # 0.6.0
 
 ### Added
