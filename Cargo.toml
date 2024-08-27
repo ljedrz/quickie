@@ -35,12 +35,12 @@ tracing = { version = "0.1", default-features = false }
 [dev-dependencies]
 deadline = "0.2"
 humansize = "2"
-libp2p = { version = "0.53", default-features = false, features = ["macros", "quic", "tokio"] }
-libp2p-tls = "0.4"
-libp2p-quic = "0.10"
+libp2p = { version = "0.54", default-features = false, features = ["macros", "quic", "tokio"] }
+libp2p-tls = "0.5"
+libp2p-quic = "0.11"
 peak_alloc = "0.2"
 rcgen = { version = "0.13", default-features = false, features = ["pem", "ring"]}
-rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rustls = { version = "0.23.12", default-features = false, features = ["ring", "std"] }
 tokio = { version = "1.24", features = ["rt-multi-thread"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["ansi", "env-filter", "fmt", "parking_lot", "smallvec"] }
 quickie = { path = ".", features = ["test"] } # a workaround to use the `test` feature in tests by default
